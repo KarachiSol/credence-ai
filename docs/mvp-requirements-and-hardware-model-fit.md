@@ -161,23 +161,29 @@ Generating one token reads the active weights once. Part comes from RAM/VRAM, pa
 
 ```text
 active_GB      = P_active * b / 8
-in_memory_frac = clamp((mem_budget - R_min) / max(R_good - R_min, 0.1), 0, 1)
-                 # 1 = everything hot in memory, 0 = experts always streamed from disk
-                 # dense models that fit: in_memory_frac = 1
+full_GB        = max(R_good, S + overhead_GB)     # memory to hold the whole model, no streaming
+in_memory_frac = 1                                          if mem_budget >= full_GB
+               = clamp((mem_budget - R_min) / (full_GB - R_min), 0, 1)   otherwise
+gpu_frac       = clamp(gpu_budget / full_GB, 0, 1)          # part read at VRAM speed
+BW_mem         = 1 / (gpu_frac / BW_gpu + (1 - gpu_frac) / BW_ram)
 
-t_mem   = active_GB * in_memory_frac       / BW_mem
-t_disk  = active_GB * (1 - in_memory_frac) / BW_disk
-tok_s   = efficiency / (t_mem + t_disk)
+streamed = (1 - in_memory_frac) * (1 - hot_cache_hit)       # hot_cache_hit = 0.6
+t_mem    = active_GB * (1 - streamed) / BW_mem
+t_disk   = active_GB * streamed       / BW_disk
+tok_s    = efficiency / (t_mem + t_disk)
 ```
+
+`hot_cache_hit` = 0.6 because Colibri's hot expert cache cuts disk reads by about 60%.
 
 Default bandwidth values until we measure them:
 
-| Hardware | `BW_mem` (GB/s) | | Disk | `BW_disk` (GB/s, random reads) |
+| Hardware | `BW_ram` / `BW_gpu` (GB/s) | | Disk | `BW_disk` (GB/s, effective) |
 |---|---|---|---|---|
-| Laptop DDR4 dual channel | 30 | | NVMe Gen4 | 3.0 |
-| Desktop DDR5 dual channel | 60 | | NVMe Gen3 | 1.5 |
-| Apple M-series base / Pro / Max | 100 / 200 / 400 | | SATA SSD | 0.4 |
-| NVIDIA / AMD dGPU (VRAM part) | 300+ | | HDD | 0.05 |
+| PC RAM (DDR4 / DDR5) | 40 | | NVMe | 6 |
+| Apple M-series base / Pro / Max / Ultra | 100 / 200 / 400 / 800 | | SATA SSD | 0.5 |
+| NVIDIA / AMD dGPU (VRAM part) | 300 | | HDD | 0.05 |
+
+With these defaults the formula matches the Colibri README within about 2x (DeepSeek V4 Flash ≈ 0.9 tok/s at 32 GB, Qwen3.6-35B-A3B ≈ 6 to 11 tok/s on CPU). All numbers live in `FIT_CONFIG` in `src/lib/fit.ts`.
 
 `efficiency` starts at 0.5. **Calibration:** after every chat, Colibri reports real tokens/sec. We store the ratio `real / estimated` per machine and use its average as `efficiency` from then on. So estimates get better on each user's machine.
 
