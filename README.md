@@ -13,14 +13,14 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 
 ## Run it on your PC
 
-Prerequisites: Node 20+, Rust (stable), and the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) for your OS.
+Prerequisites: [Bun](https://bun.sh) 1.2+, Rust (stable), and the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) for your OS.
 
 ```bash
-npm install
-npm run tauri dev     # desktop app with the real hardware scan
-npm run dev           # browser only, uses a sample 16 GB laptop profile
-npm test              # fit score tests
-npm run typecheck
+bun install
+bun run tauri dev     # desktop app with the real hardware scan
+bun run dev           # browser only, uses a sample 16 GB laptop profile
+bun run test          # fit score tests (Vitest; plain `bun test` uses Bun's own runner, so use `bun run test`)
+bun run typecheck
 ```
 
 ## Project layout
