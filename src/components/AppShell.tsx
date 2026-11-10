@@ -56,14 +56,34 @@ function EnginePill() {
   );
 }
 
+function UpdateButton({ version, onClick }: { version: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 rounded-xl border border-brand-100 bg-brand-50 p-2.5 text-left hover:bg-brand-100 dark:border-brand-500/20 dark:bg-brand-500/10 dark:hover:bg-brand-500/15"
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-white">
+        <IconDownload width={16} height={16} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-brand-700 dark:text-brand-400">Update available</span>
+        <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">Version {version}. Click to install</span>
+      </span>
+    </button>
+  );
+}
+
 interface Props {
   active: ScreenId;
   onSelect: (id: ScreenId) => void;
   title: string;
+  /** Shown at the bottom of the sidebar when a new version exists. */
+  update?: { version: string; onOpen: () => void } | null;
   children: ReactNode;
 }
 
-export function AppShell({ active, onSelect, title, children }: Props) {
+export function AppShell({ active, onSelect, title, update, children }: Props) {
   const [drawer, setDrawer] = useState(false);
 
   useEffect(() => {
@@ -86,9 +106,12 @@ export function AppShell({ active, onSelect, title, children }: Props) {
           <Logo />
         </div>
         <NavList active={active} onSelect={select} />
-        <p className="mt-auto px-2.5 text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
-          Your chats stay on this computer.
-        </p>
+        <div className="mt-auto flex flex-col gap-3">
+          {update && <UpdateButton version={update.version} onClick={update.onOpen} />}
+          <p className="px-2.5 text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+            Your chats stay on this computer.
+          </p>
+        </div>
       </aside>
 
       {/* Drawer below md. */}
@@ -113,6 +136,17 @@ export function AppShell({ active, onSelect, title, children }: Props) {
               </button>
             </div>
             <NavList active={active} onSelect={select} />
+            {update && (
+              <div className="mt-auto">
+                <UpdateButton
+                  version={update.version}
+                  onClick={() => {
+                    setDrawer(false);
+                    update.onOpen();
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -123,9 +157,12 @@ export function AppShell({ active, onSelect, title, children }: Props) {
             type="button"
             aria-label="Open menu"
             onClick={() => setDrawer(true)}
-            className="-ml-2 grid size-9 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 md:hidden dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="relative -ml-2 grid size-9 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 md:hidden dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             <IconMenu />
+            {update && (
+              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-brand-600 ring-2 ring-white dark:ring-zinc-900" />
+            )}
           </button>
           <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{title}</h1>
           <EnginePill />

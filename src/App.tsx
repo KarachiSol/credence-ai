@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell, NAV, type ScreenId } from "./components/AppShell";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { scanHardware } from "./lib/hardware";
+import { useUpdater } from "./lib/updater";
 import type { HardwareProfile } from "./lib/types";
 import { ComingSoon } from "./screens/ComingSoon";
 import { ModelsScreen } from "./screens/ModelsScreen";
@@ -34,15 +36,33 @@ export default function App() {
     void rescan();
   }, [rescan]);
 
+  const { state: update, install } = useUpdater();
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const shownOnce = useRef(false);
+  // Pop up once per app start when a new version is found.
+  useEffect(() => {
+    if (update.status === "available" && !shownOnce.current) {
+      shownOnce.current = true;
+      setUpdateOpen(true);
+    }
+  }, [update.status]);
+  const hasUpdate = update.status !== "idle" && update.version;
+
   const title = NAV.find((n) => n.id === screen)?.label ?? "";
 
   return (
-    <AppShell active={screen} onSelect={setScreen} title={title}>
+    <AppShell
+      active={screen}
+      onSelect={setScreen}
+      title={title}
+      update={hasUpdate ? { version: update.version!, onOpen: () => setUpdateOpen(true) } : null}
+    >
       {screen === "models" ? (
         <ModelsScreen hw={hw} scanning={scanning} error={error} onRescan={rescan} />
       ) : (
         <ComingSoon title={title} text={SOON[screen]} />
       )}
+      <UpdateDialog open={updateOpen} state={update} onInstall={install} onLater={() => setUpdateOpen(false)} />
     </AppShell>
   );
 }

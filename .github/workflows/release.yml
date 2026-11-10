@@ -1,0 +1,61 @@
+name: Release
+
+# How to release: bump "version" in package.json, push to main, then open
+# Actions → Release → "Run workflow". Users get the update the next time they open the app.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Publish Windows release
+    runs-on: windows-latest
+    env:
+      # Public repo that only holds installers + latest.json (the code repo stays private).
+      RELEASES_OWNER: KarachiSol
+      RELEASES_REPO: credence-ai-releases
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check updater key is set
+        shell: bash
+        env:
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          HAS_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
+        run: |
+          if grep -q "REPLACE_WITH_PUBLIC_KEY" src-tauri/tauri.conf.json; then
+            echo "::error::Put the updater public key in src-tauri/tauri.conf.json (plugins.updater.pubkey) first. See README."
+            exit 1
+          fi
+          if [ "$HAS_KEY" != "true" ] || [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::Add the TAURI_SIGNING_PRIVATE_KEY and RELEASES_TOKEN repository secrets first. See README."
+            exit 1
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: bun install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tauriScript: bun run tauri
+          args: --config ${{ github.workspace }}/src-tauri/tauri.release.conf.json
+          owner: ${{ env.RELEASES_OWNER }}
+          repo: ${{ env.RELEASES_REPO }}
+          tagName: v__VERSION__
+          releaseName: Credence AI v__VERSION__
+          releaseBody: See what's new in this version.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

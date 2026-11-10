@@ -39,3 +39,27 @@ src-tauri/           Rust backend
   src/hardware.rs    hardware scan
 docs/                requirements
 ```
+
+## Auto updates
+
+The app checks for a new version when it opens (and every 6 hours). If one exists it shows a popup and an **Update available** button at the bottom of the sidebar. One click downloads, installs and restarts.
+
+Updates come from `latest.json` in the public **KarachiSol/credence-ai-releases** repo, so the code repo can stay private.
+
+### One-time setup
+
+1. Create a **public** repo `KarachiSol/credence-ai-releases` (empty is fine, add a README).
+2. On your PC, in this project: `bunx tauri signer generate -w credence-updater.key`. Pick a password. Keep the `.key` file safe and never commit it. If it is lost, installed apps can never update again.
+3. Put the printed **public** key in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
+4. In this repo: Settings → Secrets and variables → Actions, add:
+   - `TAURI_SIGNING_PRIVATE_KEY`: contents of `credence-updater.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: the password
+   - `RELEASES_TOKEN`: a fine-grained GitHub token with **Contents: Read and write** on `credence-ai-releases`
+
+### Publishing a version
+
+1. Raise `version` in `package.json` (for example `0.1.0` → `0.1.1`). The app reads its version from there.
+2. Merge to `main`.
+3. Actions → **Release** → **Run workflow**. It builds, signs and publishes the installer plus `latest.json`.
+
+Only apps installed from a release build with the updater can update themselves. The first version you share publicly must come from this workflow.
