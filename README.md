@@ -11,6 +11,10 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 - Responsive app shell and Models screen with the Recommended list.
 - Not yet: downloads, Colibri engine, chat, settings.
 
+## Get the Windows installer (no Rust needed)
+
+Every push builds a Windows installer on GitHub Actions. Open the repo's **Actions** tab, pick the latest **Desktop build** run, and download the `credence-ai-windows` artifact (a zip with the `.exe` and `.msi`).
+
 ## Run it on your PC
 
 Prerequisites: [Bun](https://bun.sh) 1.2+, Rust (stable), and the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) for your OS.

@@ -27,7 +27,9 @@ export function ModelCard({ item }: { item: ModelFit }) {
         <FitBadge label={fit.label} />
       </header>
 
-      <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{model.description}</p>
+      <p className="mt-3 line-clamp-2 min-h-10 text-sm text-zinc-600 dark:text-zinc-300" title={model.description}>
+        {model.description}
+      </p>
 
       <p
         className={`mt-3 text-sm font-medium ${
@@ -93,14 +95,14 @@ export function ModelCard({ item }: { item: ModelFit }) {
         </div>
       )}
 
-      <div className="mt-auto flex flex-col gap-2 pt-4 @xs:flex-row @xs:items-center">
+      <div className="mt-auto flex flex-col gap-2 pt-4">
         {variantFits.length > 1 ? (
-          <label className="relative min-w-0 flex-1">
+          <label className="relative block">
             <span className="sr-only">Version</span>
             <select
               value={quant}
               onChange={(e) => setQuant(e.target.value)}
-              className="h-9 w-full appearance-none rounded-lg border border-zinc-200 bg-white pr-8 pl-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="h-9 w-full appearance-none truncate rounded-lg border border-zinc-200 bg-white pr-8 pl-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             >
               {variantFits.map((v) => (
                 <option key={v.variant.quant} value={v.variant.quant}>
@@ -115,7 +117,9 @@ export function ModelCard({ item }: { item: ModelFit }) {
             />
           </label>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-sm text-zinc-500 dark:text-zinc-400">{variant.quant}</span>
+          <p className="flex h-9 items-center truncate rounded-lg border border-zinc-200 px-3 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            {variant.quant} · {gb(variant.sizeGB)} · only version
+          </p>
         )}
         <div className="flex gap-2">
           <button
@@ -123,15 +127,15 @@ export function ModelCard({ item }: { item: ModelFit }) {
             onClick={() => setShowWhy((s) => !s)}
             aria-expanded={showWhy}
             aria-controls={whyId}
-            className="h-9 flex-1 rounded-lg px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-100 @xs:flex-none dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="h-9 shrink-0 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
           >
-            Why?
+            {showWhy ? "Hide details" : "Why?"}
           </button>
           <button
             type="button"
             disabled
             title="Downloads are coming in the next step"
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50 @xs:flex-none"
+            className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <IconDownload width={16} height={16} />
             Download
