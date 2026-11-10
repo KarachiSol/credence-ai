@@ -49,7 +49,7 @@ Source: the Colibri README at <https://github.com/JustVugg/colibri> (checked 202
 5. **Built-in helpers:** `coli plan --model <dir>` says where the model will live (VRAM, RAM, disk). `coli tune --model <dir>` measures and saves the fastest safe settings for this machine.
 6. **Server mode:** `coli serve --model <dir>` gives OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/models`) on `http://127.0.0.1:8000/v1`. Our app can talk to this instead of parsing terminal output.
 7. **GPU backends:** CPU everywhere; Vulkan for AMD, Intel, NVIDIA; CUDA for NVIDIA; Metal on Apple Silicon for some engines.
-8. **Sizes are large.** The smallest chat model in the catalog is about 14 GB (OLMoE); most are 19 GB to 500 GB+. Minimum Colibri machine: 8 GB RAM, 16 GB+ better.
+8. **Small models do exist, but only Qwen3 ones.** Colibri's GGUF importer accepts the `qwen3` (Qwen3 dense) architecture, and its docs benchmark Qwen3-0.6B. So small Qwen3 GGUFs (0.6B, 1.7B, 4B, 8B, roughly 0.5 GB to 5 GB in Q4) should run on almost any machine. Popular small models of other families (Llama 3.2, Gemma, Phi) are **not** supported (their architecture is not in Colibri's list in `docs/gguf.md`), so they cannot appear in our list. The big catalog models (MoE, streamed from SSD) are 14 GB to 500 GB+. Minimum Colibri machine: 8 GB RAM, 16 GB+ better.
 
 **Consequence:** the MVP model list must be filtered to models Colibri can run. Showing every Hugging Face model would show mostly "Won't run".
 
@@ -300,7 +300,7 @@ Engine status (Not loaded / Loading / Ready / Error) is a pill in the top bar, n
 ## 10. Open questions
 
 1. **Login timing.** Your message says login is part of the product from the start, but the Google / Apple / email screens come later. This doc assumes: MVP ships **without** a login screen, and the local data is designed so login can be added later without migrating chats (`account_id` column). Is that right, or do you want a login screen in the very first build?
-2. **Which models in the first catalog?** Colibri supports specific architectures only and the smallest chat model is about 14 GB. Suggestion: start with 5 to 8 tested models (e.g. OLMoE, Qwen3-Coder-30B-A3B, Qwen3.6-35B-A3B, DeepSeek V4 Flash REAP, GLM-5.2) and add HF search as "More models".
+2. **Which models in the first catalog?** Colibri supports specific architectures only. Suggestion: start with tested small Qwen3 dense GGUFs (1.7B, 4B, 8B) so every machine has something Recommended, plus 5 to 8 bigger models (e.g. OLMoE, Qwen3-Coder-30B-A3B, Qwen3.6-35B-A3B, DeepSeek V4 Flash REAP, GLM-5.2), and add HF search as "More models". Need to test Qwen3 1.7B / 4B / 8B on Colibri (docs only benchmark 0.6B).
 3. **Minimum supported machine.** Colibri says 8 GB RAM minimum. Do we support 8 GB machines (very few models will be Recommended) or set 16 GB as the minimum?
 4. **Dense models streaming.** Does Colibri stream dense models (like Qwen3.8-27B) from disk, or must they fit in RAM? Changes the `R_min` formula.
 5. **`coli plan` output.** Is it machine-readable (JSON)? If yes, we use it to confirm our labels after download.
