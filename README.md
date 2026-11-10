@@ -44,17 +44,15 @@ docs/                requirements
 
 The app checks for a new version when it opens (and every 6 hours). If one exists it shows a popup and an **Update available** button at the bottom of the sidebar. One click downloads, installs and restarts.
 
-Updates come from `latest.json` in the public **KarachiSol/credence-ai-releases** repo, so the code repo can stay private.
+Updates come from `latest.json` attached to the latest GitHub Release of this repo. The repo must be **public** before sharing the app, otherwise installed apps cannot download updates.
 
 ### One-time setup
 
-1. Create a **public** repo `KarachiSol/credence-ai-releases` (empty is fine, add a README).
-2. On your PC, in this project: `bunx tauri signer generate -w credence-updater.key`. Pick a password. Keep the `.key` file safe and never commit it. If it is lost, installed apps can never update again.
-3. Put the printed **public** key in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
-4. In this repo: Settings → Secrets and variables → Actions, add:
+1. On your PC, in this project: `bunx tauri signer generate -w credence-updater.key`. Pick a password. Keep the `.key` file safe and never commit it. If it is lost, installed apps can never update again.
+2. Put the printed **public** key in `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`.
+3. In this repo: Settings → Secrets and variables → Actions, add:
    - `TAURI_SIGNING_PRIVATE_KEY`: contents of `credence-updater.key`
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: the password
-   - `RELEASES_TOKEN`: a fine-grained GitHub token with **Contents: Read and write** on `credence-ai-releases`
 
 ### Publishing a version
 
