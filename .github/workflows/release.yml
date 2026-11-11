@@ -47,7 +47,7 @@ jobs:
       # Colibri's own Linux engines need a very new glibc; build them on this older Ubuntu.
       - name: Install Colibri build tools
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libvulkan-dev glslc
+        run: sudo apt-get install -y libvulkan-dev
       - name: Cache Colibri engines
         if: runner.os == 'Linux'
         id: colibri-cache

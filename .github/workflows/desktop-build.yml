@@ -60,7 +60,7 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       # Colibri's own Linux engines need a very new glibc; build them on this older Ubuntu.
       - name: Install Colibri build tools
-        run: sudo apt-get install -y libvulkan-dev glslc
+        run: sudo apt-get install -y libvulkan-dev
       - name: Cache Colibri engines
         id: colibri-cache
         uses: actions/cache@v5

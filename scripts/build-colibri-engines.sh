@@ -6,7 +6,9 @@
 # Ubuntu 22.04 (glibc 2.35): the engines then run on 22.04 and anything newer.
 # The app unpacks this archive over the official release (src-tauri/src/colibri_setup.rs).
 #
-# Needs: git, make, gcc, libvulkan-dev, glslc.
+# Needs: git, make, gcc, curl, libvulkan-dev. Ubuntu 22.04 has no glslc, so the
+# shaders (SPIR-V, the same on every system) are taken from the official release
+# of the same version instead of being compiled here.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,9 +21,30 @@ required=" qwen36 qwen38 olmoe colibri "
 
 rm -rf "$work"
 git clone --quiet --depth 1 --branch "$tag" https://github.com/JustVugg/colibri "$work/src"
+
+# The official shaders, and a stand-in glslc that hands them to make.
+mkdir -p "$work/official"
+curl -fsSL "https://github.com/JustVugg/colibri/releases/download/$tag/colibri-$tag-linux-x86_64.tar.gz" \
+  | tar -xz -C "$work/official" ./shaders 2>/dev/null \
+  || curl -fsSL "https://github.com/JustVugg/colibri/releases/download/$tag/colibri-$tag-linux-x86_64.tar.gz" \
+  | tar -xz -C "$work/official" shaders
+cat > "$work/glslc" <<GLSLC
+#!/usr/bin/env bash
+# make calls: glslc [flags] <source> -o shaders/<name>.spv
+while [ \$# -gt 0 ]; do
+  if [ "\$1" = "-o" ]; then out="\$2"; shift; fi
+  shift
+done
+src="$work/official/shaders/\$(basename "\$out")"
+[ -f "\$src" ] || { echo "no official shader for \$out" >&2; exit 1; }
+cp "\$src" "\$out"
+GLSLC
+chmod +x "$work/glslc"
+make_args+=(GLSLC="$work/glslc")
+
 cd "$work/src/c"
 stage="$work/stage"
-mkdir -p "$stage/shaders"
+mkdir -p "$stage"
 
 for t in colibri glm53 inkling kimi_k3 olmoe qwen36 qwen38 deepseek_v41 mimo qwenimage laya gliner_decide; do
   if make -j"$(nproc)" "$t" "${make_args[@]}"; then
@@ -37,7 +60,7 @@ if make -j"$(nproc)" deepseek-v4 "${make_args[@]}"; then
 else
   echo "::warning::Colibri engine deepseek_v4 did not build; the official one stays in place"
 fi
-cp shaders/*.spv "$stage/shaders/"
+# Shaders are not packed: the official release already has the same ones.
 
 # Show the newest glibc symbol each engine needs.
 for f in "$stage"/*; do
