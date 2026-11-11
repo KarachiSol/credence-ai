@@ -9,9 +9,17 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    name: Publish Windows release
-    runs-on: windows-latest
+  publish:
+    name: Publish ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +36,13 @@ jobs:
             echo "::error::Add the TAURI_SIGNING_PRIVATE_KEY repository secret first. See README."
             exit 1
           fi
+
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - uses: oven-sh/setup-bun@v2
         with:

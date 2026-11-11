@@ -25,9 +25,14 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 
 Already run a model server (Colibri by hand, LM Studio, Ollama)? Settings → Other server, then Chat → Connect.
 
-## Get the Windows installer (no Rust needed)
+## Get the installers (no Rust needed)
 
-Every push builds a Windows installer on GitHub Actions. Open the repo's **Actions** tab, pick the latest **Desktop build** run, and download the `credence-ai-windows` artifact (a zip with the `.exe` and `.msi`).
+Every push builds the app on GitHub Actions. Open the repo's **Actions** tab, pick the latest **Desktop build** run, and download:
+
+- `credence-ai-windows`: `.exe` and `.msi`
+- `credence-ai-linux`: `.deb` (Ubuntu / Debian: `sudo apt install ./Credence*.deb`), `.AppImage` (any distro: `chmod +x` then run), `.rpm` (Fedora)
+
+On Linux, auto update works for the **AppImage**. `.deb` / `.rpm` users install new versions by hand.
 
 ## Run it on your PC
 
