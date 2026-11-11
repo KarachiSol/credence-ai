@@ -1,0 +1,141 @@
+import type { CatalogModel } from "./types";
+
+/**
+ * Curated starter catalog. RAM numbers for the big models come from the
+ * Colibri README (github.com/JustVugg/colibri, checked 2026-11-10).
+ * Sizes and active parameters marked "estimate" must be verified before release.
+ * `file` is a file or folder inside `hfRepo`; "" downloads the whole repo (Colibri containers).
+ * TODO before release: confirm repo + file for OLMoE and DeepSeek (placeholders today).
+ */
+export const CATALOG: CatalogModel[] = [
+  {
+    id: "qwen3-1.7b",
+    name: "Qwen3 1.7B",
+    publisher: "Qwen",
+    hfRepo: "Qwen/Qwen3-1.7B-GGUF",
+    description: "Tiny and fast. Good for quick questions on any computer.",
+    architecture: "qwen3",
+    kind: "dense",
+    totalParamsB: 1.7,
+    activeParamsB: 1.7,
+    qualityRank: 10,
+    tags: ["Chat", "Small"],
+    variants: [
+      { quant: "Q8_0", bitsPerWeight: 8.5, sizeGB: 1.8, file: "Qwen3-1.7B-Q8_0.gguf" },
+    ],
+  },
+  {
+    id: "qwen3-4b",
+    name: "Qwen3 4B",
+    publisher: "Qwen",
+    hfRepo: "Qwen/Qwen3-4B-GGUF",
+    description: "Small all-rounder for chat, writing and simple code.",
+    architecture: "qwen3",
+    kind: "dense",
+    totalParamsB: 4,
+    activeParamsB: 4,
+    qualityRank: 20,
+    tags: ["Chat", "Small"],
+    variants: [
+      { quant: "Q4_K_M", bitsPerWeight: 4.8, sizeGB: 2.5, file: "Qwen3-4B-Q4_K_M.gguf" },
+      { quant: "Q8_0", bitsPerWeight: 8.5, sizeGB: 4.3, file: "Qwen3-4B-Q8_0.gguf" },
+    ],
+  },
+  {
+    id: "qwen3-8b",
+    name: "Qwen3 8B",
+    publisher: "Qwen",
+    hfRepo: "Qwen/Qwen3-8B-GGUF",
+    description: "Strong everyday model. Needs a bit more memory.",
+    architecture: "qwen3",
+    kind: "dense",
+    totalParamsB: 8.2,
+    activeParamsB: 8.2,
+    qualityRank: 30,
+    tags: ["Chat", "Code"],
+    variants: [
+      { quant: "Q4_K_M", bitsPerWeight: 4.8, sizeGB: 5.0, file: "Qwen3-8B-Q4_K_M.gguf" },
+      { quant: "Q8_0", bitsPerWeight: 8.5, sizeGB: 8.7, file: "Qwen3-8B-Q8_0.gguf" },
+    ],
+  },
+  {
+    id: "olmoe",
+    name: "OLMoE",
+    publisher: "AllenAI",
+    hfRepo: "allenai/OLMoE-1B-7B-0125-Instruct",
+    description: "Small fully open mixture-of-experts model. Very fast on CPU.",
+    architecture: "olmoe",
+    kind: "moe",
+    totalParamsB: 6.9,
+    activeParamsB: 1.3,
+    qualityRank: 15,
+    tags: ["Chat", "Open data"],
+    variants: [
+      { quant: "INT8", bitsPerWeight: 8.5, sizeGB: 7, ramMinGB: 8, ramGoodGB: 8, file: "colibri-int8" },
+    ],
+  },
+  {
+    id: "qwen3-coder-30b-a3b",
+    name: "Qwen3 Coder 30B A3B",
+    publisher: "Qwen",
+    hfRepo: "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+    description: "Coding model. Big brain, small active part, so it stays quick.",
+    architecture: "qwen3moe",
+    kind: "moe",
+    totalParamsB: 30.5,
+    activeParamsB: 3.3,
+    qualityRank: 55,
+    tags: ["Code"],
+    variants: [
+      { quant: "Q4_K_M", bitsPerWeight: 4.8, sizeGB: 19, ramMinGB: 8, ramGoodGB: 18, file: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf" },
+    ],
+  },
+  {
+    id: "qwen3.6-35b-a3b",
+    name: "Qwen3.6 35B A3B",
+    publisher: "Qwen",
+    hfRepo: "unsloth/Qwen3.6-35B-A3B-GGUF",
+    description: "Smart general model that streams experts from your SSD.",
+    architecture: "qwen35moe",
+    kind: "moe",
+    totalParamsB: 35,
+    activeParamsB: 3,
+    qualityRank: 60,
+    tags: ["Chat", "Code", "Reasoning"],
+    variants: [
+      { quant: "UD-Q4_K_M", bitsPerWeight: 4.8, sizeGB: 23, ramMinGB: 10, ramGoodGB: 20, file: "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf" },
+    ],
+  },
+  {
+    id: "deepseek-v4-flash-reap",
+    name: "DeepSeek V4 Flash REAP 150B",
+    publisher: "DeepSeek",
+    hfRepo: "deepseek-ai/DeepSeek-V4-Flash",
+    description: "Large reasoning model, trimmed to fit more machines.",
+    architecture: "deepseek4",
+    kind: "moe",
+    totalParamsB: 150,
+    activeParamsB: 13, // estimate
+    qualityRank: 75,
+    tags: ["Reasoning", "Large"],
+    variants: [
+      { quant: "INT4", bitsPerWeight: 4.5, sizeGB: 85, ramMinGB: 16, ramGoodGB: 32, file: "colibri-int4" },
+    ],
+  },
+  {
+    id: "glm-5.2",
+    name: "GLM-5.2",
+    publisher: "Zhipu AI",
+    hfRepo: "mastouri/GLM-5.2-colibri-int4-g64-with-int8-mtp",
+    description: "Frontier-class model. Needs a fast NVMe SSD and lots of space.",
+    architecture: "glm-dsa",
+    kind: "moe",
+    totalParamsB: 744,
+    activeParamsB: 40, // estimate
+    qualityRank: 95,
+    tags: ["Reasoning", "Frontier", "Large"],
+    variants: [
+      { quant: "INT4", bitsPerWeight: 4.5, sizeGB: 429, ramMinGB: 16, ramGoodGB: 24, file: "" },
+    ],
+  },
+];
