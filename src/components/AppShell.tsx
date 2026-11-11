@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { IconBox, IconBrain, IconChat, IconClose, IconDownload, IconMenu, IconModels, IconSettings } from "./icons";
+import { BrandTile } from "./BrandMark";
 
 export type ScreenId = "chat" | "models" | "my-models" | "downloads" | "memory" | "settings";
 
@@ -15,7 +16,7 @@ export const NAV: { id: ScreenId; label: string; icon: ComponentType<SVGProps<SV
 function Logo() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="grid size-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">C</div>
+      <BrandTile className="size-8 shrink-0" />
       <span className="text-[15px] font-semibold tracking-tight">Credence AI</span>
     </div>
   );
