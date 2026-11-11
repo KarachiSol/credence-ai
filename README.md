@@ -30,7 +30,9 @@ Already run a model server (Colibri by hand, LM Studio, Ollama)? Settings → Ot
 Every push builds the app on GitHub Actions. Open the repo's **Actions** tab, pick the latest **Desktop build** run, and download:
 
 - `credence-ai-windows`: `.exe` and `.msi`
-- `credence-ai-linux`: `.deb` (Ubuntu / Debian: `sudo apt install ./Credence*.deb`), `.AppImage` (any distro: `chmod +x` then run), `.rpm` (Fedora)
+- `credence-ai-linux-appimage`: `.AppImage` (any distro: `chmod +x` then run; the only Linux format that auto-updates)
+- `credence-ai-linux-deb`: `.deb` (Ubuntu / Debian: `sudo apt install ./Credence*.deb`)
+- `credence-ai-linux-rpm`: `.rpm` (Fedora / openSUSE)
 
 On Linux, auto update works for the **AppImage**. `.deb` / `.rpm` users install new versions by hand.
 
