@@ -2,6 +2,10 @@
 //! folder. The prebuilt release for this OS is downloaded from GitHub into
 //! `<app data>/colibri/<tag>/` and checked against the release's SHA256SUMS.txt.
 //! Colibri's launcher (`coli`) is a Python 3.10+ script, so Python is checked too.
+//!
+//! The version is pinned in `colibri-version.txt`. On Linux the app also ships the
+//! engines built by our CI on an older Ubuntu (`overlay`): Colibri's own Linux
+//! engines are built on the newest Ubuntu and need a glibc that older systems lack.
 
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -10,8 +14,31 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tokio::io::AsyncWriteExt;
 
-const RELEASES_API: &str = "https://api.github.com/repos/JustVugg/colibri/releases/latest";
+const RELEASES_API: &str = "https://api.github.com/repos/JustVugg/colibri/releases/tags/";
 const CURRENT_FILE: &str = "current.txt";
+/// Written after our engines were unpacked over the release; holds the overlay's size.
+const OVERLAY_MARK: &str = ".credence-engines";
+
+/// The Colibri release this version of Credence uses.
+pub fn pinned_tag() -> &'static str {
+    include_str!("../../colibri-version.txt").trim()
+}
+
+fn overlay_stamp(overlay: &Path) -> String {
+    std::fs::metadata(overlay).map(|m| m.len().to_string()).unwrap_or_default()
+}
+
+fn overlay_current(dir: &Path, overlay: Option<&Path>) -> bool {
+    match overlay {
+        None => true,
+        Some(o) => std::fs::read_to_string(dir.join(OVERLAY_MARK)).is_ok_and(|s| s.trim() == overlay_stamp(o)),
+    }
+}
+
+fn apply_overlay(dir: &Path, overlay: &Path) -> Result<(), String> {
+    extract(overlay, dir)?;
+    std::fs::write(dir.join(OVERLAY_MARK), overlay_stamp(overlay)).map_err(|e| e.to_string())
+}
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -58,11 +85,18 @@ fn root(app_data: &Path) -> PathBuf {
 }
 
 /// The folder of the installed engine, if any.
-pub fn installed_dir(app_data: &Path) -> Option<(PathBuf, String)> {
+/// The unpacked release, whatever its state.
+fn unpacked_dir(app_data: &Path) -> Option<(PathBuf, String)> {
     let root = root(app_data);
     let tag = std::fs::read_to_string(root.join(CURRENT_FILE)).ok()?.trim().to_string();
     let dir = root.join(&tag);
     dir.is_dir().then_some((dir, tag))
+}
+
+/// The engine folder, when the pinned version is installed and ready to run.
+pub fn installed_dir(app_data: &Path, overlay: Option<&Path>) -> Option<(PathBuf, String)> {
+    let (dir, tag) = unpacked_dir(app_data)?;
+    (tag == pinned_tag() && overlay_current(&dir, overlay)).then_some((dir, tag))
 }
 
 fn python_hint() -> String {
@@ -116,8 +150,8 @@ pub fn python_version() -> Option<String> {
     None
 }
 
-pub fn info(app_data: &Path) -> ColibriInfo {
-    let installed = installed_dir(app_data);
+pub fn info(app_data: &Path, overlay: Option<&Path>) -> ColibriInfo {
+    let installed = installed_dir(app_data, overlay);
     ColibriInfo {
         supported: asset_suffix().is_some(),
         installed: installed.is_some(),
@@ -204,15 +238,29 @@ fn mark_executable(dir: &Path) {
 }
 
 /// Downloads and unpacks the latest Colibri release. Reports progress through `emit`.
-pub async fn install(app_data: &Path, emit: &(dyn Fn(Progress) + Send + Sync)) -> Result<ColibriInfo, String> {
+pub async fn install(
+    app_data: &Path,
+    overlay: Option<&Path>,
+    emit: &(dyn Fn(Progress) + Send + Sync),
+) -> Result<ColibriInfo, String> {
     let suffix = asset_suffix().ok_or("Colibri has no ready-made engine for this computer yet.")?;
     emit(Progress::phase("checking"));
+    // The right version is unpacked already, only our engines are missing or older.
+    if let (Some((dir, tag)), Some(o)) = (unpacked_dir(app_data), overlay) {
+        if tag == pinned_tag() {
+            emit(Progress::phase("extracting"));
+            let (d, o) = (dir.clone(), o.to_path_buf());
+            tokio::task::spawn_blocking(move || apply_overlay(&d, &o)).await.map_err(|e| e.to_string())??;
+            emit(Progress::phase("done"));
+            return Ok(info(app_data, overlay));
+        }
+    }
     let client = reqwest::Client::builder()
         .user_agent(concat!("CredenceAI/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
-    let api = std::env::var("CREDENCE_COLIBRI_API").unwrap_or_else(|_| RELEASES_API.into());
+    let api = std::env::var("CREDENCE_COLIBRI_API").unwrap_or_else(|_| format!("{RELEASES_API}{}", pinned_tag()));
     let json: serde_json::Value = client
         .get(&api)
         .header("Accept", "application/vnd.github+json")
@@ -226,10 +274,10 @@ pub async fn install(app_data: &Path, emit: &(dyn Fn(Progress) + Send + Sync)) -
     let release = pick_release(&json, suffix)?;
     let root = root(app_data);
     let dest = root.join(&release.tag);
-    if let Some((_, tag)) = installed_dir(app_data) {
+    if let Some((_, tag)) = installed_dir(app_data, overlay) {
         if tag == release.tag {
             emit(Progress::phase("done"));
-            return Ok(info(app_data));
+            return Ok(info(app_data, overlay));
         }
     }
 
@@ -288,9 +336,13 @@ pub async fn install(app_data: &Path, emit: &(dyn Fn(Progress) + Send + Sync)) -
     emit(Progress::phase("extracting"));
     let staging = root.join(format!("{}.partial", release.tag));
     let (a, s, d) = (archive_path.clone(), staging.clone(), dest.clone());
+    let o = overlay.map(Path::to_path_buf);
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         let _ = std::fs::remove_dir_all(&s);
         extract(&a, &s)?;
+        if let Some(o) = o {
+            apply_overlay(&s, &o)?;
+        }
         let _ = std::fs::remove_dir_all(&d);
         std::fs::rename(&s, &d).map_err(|e| e.to_string())
     })
@@ -309,7 +361,7 @@ pub async fn install(app_data: &Path, emit: &(dyn Fn(Progress) + Send + Sync)) -
         }
     }
     emit(Progress::phase("done"));
-    Ok(info(app_data))
+    Ok(info(app_data, overlay))
 }
 
 #[cfg(test)]

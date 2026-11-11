@@ -57,10 +57,22 @@ async fn installed_delete(downloads: State<'_, Manager>, id: String) -> Result<(
 #[derive(Default)]
 struct InstallLock(tokio::sync::Mutex<()>);
 
+/// Linux packages ship Colibri engines built for older glibc (see colibri_setup).
+fn engine_overlay(app: &tauri::AppHandle) -> Option<PathBuf> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    app.path()
+        .resolve("colibri-engines-linux.tar.gz", tauri::path::BaseDirectory::Resource)
+        .ok()
+        .filter(|p| p.is_file())
+}
+
 #[tauri::command]
 async fn colibri_info(app: tauri::AppHandle) -> Result<colibri_setup::ColibriInfo, String> {
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || colibri_setup::info(&data))
+    let overlay = engine_overlay(&app);
+    tauri::async_runtime::spawn_blocking(move || colibri_setup::info(&data, overlay.as_deref()))
         .await
         .map_err(|e| e.to_string())
 }
@@ -73,7 +85,8 @@ async fn colibri_install(app: tauri::AppHandle, lock: State<'_, InstallLock>) ->
     let emit = move |p: colibri_setup::Progress| {
         let _ = handle.emit("colibri-setup", p);
     };
-    let result = colibri_setup::install(&data, &emit).await;
+    let overlay = engine_overlay(&app);
+    let result = colibri_setup::install(&data, overlay.as_deref(), &emit).await;
     if let Err(e) = &result {
         let _ = app.emit(
             "colibri-setup",
@@ -94,7 +107,7 @@ async fn engine_start(
     // No folder chosen: use the engine Credence installed itself.
     let dir = if colibri_dir.trim().is_empty() {
         let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
-        colibri_setup::installed_dir(&data)
+        colibri_setup::installed_dir(&data, engine_overlay(&app).as_deref())
             .map(|(d, _)| d)
             .ok_or("The Colibri engine is not installed yet.")?
     } else {

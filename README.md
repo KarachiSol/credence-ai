@@ -20,6 +20,7 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 ### Trying the agent
 
 1. Nothing to set up: Credence downloads the Colibri engine by itself (once, in the background on first launch) into its app data folder (`~/.local/share/ai.credence.desktop/colibri` on Linux, `%APPDATA%\ai.credence.desktop\colibri` on Windows) and checks it against the release checksums. Colibri's launcher needs Python 3.10+ (already on Ubuntu; the app tells you the install command if it is missing).
+   On Linux the app also ships Colibri's engines rebuilt by our CI on Ubuntu 22.04 (`scripts/build-colibri-engines.sh`), because the official Linux engines need a newer glibc than most systems have. The Colibri version is pinned in `colibri-version.txt`. A local Linux build must run that script first.
    Installed Colibri yourself? Settings → Model engine → Advanced → your folder (the release folder or the git checkout).
 2. Download a model (Qwen3 8B or bigger works best as an agent), then Chat → Start.
 
