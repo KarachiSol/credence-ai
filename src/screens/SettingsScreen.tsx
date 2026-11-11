@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconFolder } from "../components/icons";
+import { ensureColibri, refreshColibri, setupLabel, useColibri } from "../lib/colibri";
 import { invoke, isTauri } from "../lib/platform";
 import type { Settings } from "../lib/settings";
 
@@ -54,6 +55,53 @@ function Segmented<T extends string>(p: { value: T; options: { value: T; label: 
   );
 }
 
+function BuiltInEngine() {
+  const setup = useColibri();
+  useEffect(() => {
+    void refreshColibri().catch(() => {});
+  }, []);
+  const busy = setupLabel(setup);
+  const info = setup.info;
+  const ok = info?.installed && info.python;
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 p-3 sm:flex-row sm:items-center dark:border-zinc-800">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-sm font-medium">
+          <span
+            className={`size-2 shrink-0 rounded-full ${busy ? "animate-pulse bg-amber-500" : ok ? "bg-emerald-500" : info ? "bg-rose-500" : "bg-zinc-400"}`}
+          />
+          {busy ??
+            (!info
+              ? "Checking the engine…"
+              : !info.supported
+                ? "No ready-made engine for this computer"
+                : info.installed
+                  ? `Colibri ${info.version ?? ""} installed`
+                  : "Engine not installed yet")}
+        </p>
+        <p className="mt-0.5 text-xs break-words text-zinc-500 dark:text-zinc-400">
+          {setup.phase === "error" && setup.error
+            ? setup.error
+            : info && !info.python
+              ? `Colibri needs Python 3.10 or newer. ${info.pythonHint}`
+              : info?.installed
+                ? "Credence installed this for you. Nothing to set up."
+                : "Credence downloads it by itself (one time) when you start a model."}
+        </p>
+      </div>
+      {info && info.supported && !info.installed && !busy && (
+        <button
+          type="button"
+          onClick={() => void ensureColibri().catch(() => {})}
+          className="h-9 shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          {setup.phase === "error" ? "Try again" : "Install now"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function SettingsScreen({ settings: s, update }: Props) {
   const [workspace, setWorkspace] = useState("");
   useEffect(() => {
@@ -75,27 +123,34 @@ export function SettingsScreen({ settings: s, update }: Props) {
         />
         {s.engineMode === "colibri" ? (
           <>
-            <Field
-              label="Colibri folder"
-              hint={
-                <>
-                  The folder where you unzipped the Colibri release, or your <code>colibri</code> git checkout.
-                  Credence finds <code>coli</code> (or <code>coli.cmd</code> on Windows) inside it, including its{" "}
-                  <code>c/</code> folder. Python 3 must be installed.
-                </>
-              }
-            >
-              <input
-                className={input}
-                value={s.colibriDir}
-                onChange={(e) => update({ colibriDir: e.target.value })}
-                placeholder={navigator.userAgent.includes("Windows") ? "C:\\colibri" : "~/colibri"}
-                spellCheck={false}
-              />
-            </Field>
-            <Field label="Colibri address" hint="Default is fine unless you changed Colibri's port.">
-              <input className={input} value={s.colibriUrl} onChange={(e) => update({ colibriUrl: e.target.value })} spellCheck={false} />
-            </Field>
+            {!s.colibriDir.trim() && <BuiltInEngine />}
+            <details className="group" open={!!s.colibriDir.trim()}>
+              <summary className="cursor-pointer text-sm font-medium text-zinc-600 select-none hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">
+                Advanced
+              </summary>
+              <div className="mt-4 flex flex-col gap-4">
+                <Field
+                  label="Use my own Colibri folder (optional)"
+                  hint={
+                    <>
+                      Leave empty and Credence installs and updates the engine for you. Only fill this in if you
+                      installed Colibri yourself: the release folder or your <code>colibri</code> checkout.
+                    </>
+                  }
+                >
+                  <input
+                    className={input}
+                    value={s.colibriDir}
+                    onChange={(e) => update({ colibriDir: e.target.value })}
+                    placeholder={navigator.userAgent.includes("Windows") ? "C:\\colibri" : "~/colibri"}
+                    spellCheck={false}
+                  />
+                </Field>
+                <Field label="Colibri address" hint="Default is fine unless you changed Colibri's port.">
+                  <input className={input} value={s.colibriUrl} onChange={(e) => update({ colibriUrl: e.target.value })} spellCheck={false} />
+                </Field>
+              </div>
+            </details>
           </>
         ) : (
           <>

@@ -22,6 +22,7 @@ import { runAgent } from "../lib/agent";
 import { getStore, type ChatMessage, type Conversation, type Source, type Store } from "../lib/db";
 import type { Downloads } from "../lib/downloads";
 import type { Engine } from "../lib/engine";
+import { setupLabel, useColibri } from "../lib/colibri";
 import { tokPerSec } from "../lib/format";
 import { extractMemories } from "../lib/memory";
 import { openUrl, uid } from "../lib/platform";
@@ -395,6 +396,7 @@ function EngineSetup(p: {
 }) {
   const { info } = p.engine;
   const custom = p.settings.engineMode === "custom";
+  const setup = setupLabel(useColibri());
   const btn = "h-9 shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50";
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -402,7 +404,7 @@ function EngineSetup(p: {
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
         {custom
           ? `Credence will talk to ${p.settings.customUrl}. Change it in Settings.`
-          : "Pick one of your downloaded models. The first start can take a few minutes while Colibri prepares it."}
+          : "Pick one of your downloaded models. The first start can take a few minutes while the engine prepares it."}
       </p>
 
       {info.state === "error" && (
@@ -464,16 +466,10 @@ function EngineSetup(p: {
         </ul>
       )}
 
-      {!custom && !p.settings.colibriDir && (
-        <p className="mt-4 flex gap-2 text-xs text-amber-800 dark:text-amber-300">
-          <IconWarn width={14} height={14} className="mt-px shrink-0" />
-          <span>
-            Set the Colibri folder in{" "}
-            <button type="button" onClick={p.onOpenSettings} className="font-medium underline underline-offset-2">
-              Settings
-            </button>{" "}
-            first, or connect to a model server you already run.
-          </span>
+      {!custom && setup && (
+        <p className="mt-4 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <IconSpinner width={14} height={14} className="shrink-0" />
+          <span>{setup}</span>
         </p>
       )}
     </div>
