@@ -1,8 +1,12 @@
 mod downloads;
+mod engine;
 mod hardware;
+mod workspace;
 
 use downloads::{DownloadSpec, InstalledModel, Job, Manager};
 use std::sync::Arc;
+use std::path::PathBuf;
+use std::time::Duration;
 use tauri::{Emitter, Manager as _, State};
 
 /// Scans CPU, RAM, GPU and the disk that will hold the models.
@@ -46,6 +50,194 @@ async fn installed_delete(downloads: State<'_, Manager>, id: String) -> Result<(
     downloads.delete_installed(&id).await
 }
 
+// ---- Engine (Colibri) ----
+
+#[tauri::command]
+async fn engine_start(
+    engine: State<'_, engine::Engine>,
+    colibri_dir: String,
+    model_dir: String,
+) -> Result<engine::EngineStatus, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        engine.start(&PathBuf::from(colibri_dir), &PathBuf::from(model_dir), &[])
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn engine_stop(engine: State<'_, engine::Engine>) {
+    engine.stop()
+}
+
+#[tauri::command]
+fn engine_status(engine: State<'_, engine::Engine>) -> engine::EngineStatus {
+    engine.status()
+}
+
+#[tauri::command]
+fn engine_logs(engine: State<'_, engine::Engine>) -> Vec<String> {
+    engine.logs()
+}
+
+// ---- Workspace files for agent tools ----
+
+fn workspace_dir(app: &tauri::AppHandle, custom: Option<String>) -> Result<PathBuf, String> {
+    match custom.filter(|c| !c.trim().is_empty()) {
+        Some(c) => Ok(PathBuf::from(c)),
+        None => app
+            .path()
+            .document_dir()
+            .map(|d| d.join("Credence"))
+            .map_err(|e| e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn workspace_root(app: tauri::AppHandle, root: Option<String>) -> Result<String, String> {
+    let dir = workspace_dir(&app, root)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn workspace_write(
+    app: tauri::AppHandle,
+    root: Option<String>,
+    path: String,
+    content: String,
+    overwrite: bool,
+) -> Result<String, String> {
+    workspace::write(&workspace_dir(&app, root)?, &path, &content, overwrite)
+}
+
+#[tauri::command]
+fn workspace_read(app: tauri::AppHandle, root: Option<String>, path: String) -> Result<String, String> {
+    workspace::read(&workspace_dir(&app, root)?, &path)
+}
+
+#[tauri::command]
+fn workspace_list(
+    app: tauri::AppHandle,
+    root: Option<String>,
+    path: String,
+) -> Result<Vec<workspace::WsEntry>, String> {
+    workspace::list(&workspace_dir(&app, root)?, &path)
+}
+
+// ---- Web access for the search / read-page tools ----
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WebPage {
+    status: u16,
+    final_url: String,
+    content_type: String,
+    body: String,
+}
+
+const MAX_PAGE_BYTES: usize = 3 * 1024 * 1024;
+
+/// GET (or form POST) a web page from Rust so CORS and browser limits don't apply.
+#[tauri::command]
+async fn web_fetch(
+    url: String,
+    form: Option<Vec<(String, String)>>,
+    headers: Option<Vec<(String, String)>>,
+) -> Result<WebPage, String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Only http(s) links can be opened.".into());
+    }
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36")
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut req = match form {
+        Some(f) => client.post(&url).form(&f),
+        None => client.get(&url),
+    };
+    for (k, v) in headers.unwrap_or_default() {
+        req = req.header(k, v);
+    }
+    let res = req
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .send()
+        .await
+        .map_err(|e| format!("Could not open {url}: {e}"))?;
+    let status = res.status().as_u16();
+    let final_url = res.url().to_string();
+    let content_type = res
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let mut body = Vec::new();
+    let mut stream = res.bytes_stream();
+    use futures_util::StreamExt;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        body.extend_from_slice(&chunk);
+        if body.len() > MAX_PAGE_BYTES {
+            break;
+        }
+    }
+    Ok(WebPage {
+        status,
+        final_url,
+        content_type,
+        body: String::from_utf8_lossy(&body).into_owned(),
+    })
+}
+
+/// Opens any folder (workspace, engine) in the system file manager.
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    let program = if cfg!(target_os = "windows") {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(program)
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Opens a web link in the user's default browser.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Only web links can be opened.".into());
+    }
+    #[cfg(windows)]
+    let mut cmd = {
+        // `start` handles URLs with & correctly; the empty "" is the window title.
+        let mut c = std::process::Command::new("cmd");
+        use std::os::windows::process::CommandExt;
+        c.args(["/C", "start", ""]).arg(&url).creation_flags(0x0800_0000);
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&url);
+        c
+    };
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&url);
+        c
+    };
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Opens the models folder in Explorer / Finder / the file manager.
 #[tauri::command]
 fn open_models_folder(downloads: State<'_, Manager>) -> Result<(), String> {
@@ -69,6 +261,9 @@ fn open_models_folder(downloads: State<'_, Manager>) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_http::init())
+        .manage(engine::Engine::default())
         .setup(|app| {
             #[cfg(desktop)]
             app.handle()
@@ -93,8 +288,25 @@ pub fn run() {
             download_remove,
             installed_list,
             installed_delete,
-            open_models_folder
+            open_models_folder,
+            engine_start,
+            engine_stop,
+            engine_status,
+            engine_logs,
+            workspace_root,
+            workspace_write,
+            workspace_read,
+            workspace_list,
+            web_fetch,
+            open_folder,
+            open_url
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Credence AI");
+        .build(tauri::generate_context!())
+        .expect("error while building Credence AI")
+        .run(|app, event| {
+            // Never leave the engine running after the app closes.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<engine::Engine>().stop();
+            }
+        });
 }

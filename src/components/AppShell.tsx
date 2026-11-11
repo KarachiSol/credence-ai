@@ -1,13 +1,14 @@
 import { useEffect, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
-import { IconBox, IconChat, IconClose, IconDownload, IconMenu, IconModels, IconSettings } from "./icons";
+import { IconBox, IconBrain, IconChat, IconClose, IconDownload, IconMenu, IconModels, IconSettings } from "./icons";
 
-export type ScreenId = "models" | "my-models" | "downloads" | "chat" | "settings";
+export type ScreenId = "chat" | "models" | "my-models" | "downloads" | "memory" | "settings";
 
 export const NAV: { id: ScreenId; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
+  { id: "chat", label: "Chat", icon: IconChat },
   { id: "models", label: "Models", icon: IconModels },
   { id: "my-models", label: "My models", icon: IconBox },
   { id: "downloads", label: "Downloads", icon: IconDownload },
-  { id: "chat", label: "Chat", icon: IconChat },
+  { id: "memory", label: "Memory", icon: IconBrain },
   { id: "settings", label: "Settings", icon: IconSettings },
 ];
 
@@ -59,13 +60,24 @@ function NavList({ active, onSelect, badges }: { active: ScreenId; onSelect: (id
   );
 }
 
-function EnginePill() {
-  // Colibri wiring comes in a later step; until then the engine is "not set up".
+export type EngineDisplay = { state: "off" | "starting" | "ready" | "error"; label: string };
+
+const PILL_DOT = { off: "bg-zinc-400", starting: "bg-amber-500 animate-pulse", ready: "bg-emerald-500", error: "bg-rose-500" };
+const PILL_TEXT = { off: "no model", starting: "loading…", ready: "ready", error: "error" };
+
+function EnginePill({ engine, onClick }: { engine: EngineDisplay; onClick?: () => void }) {
   return (
-    <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-      <span className="size-1.5 rounded-full bg-zinc-400" />
-      <span className="hidden sm:inline">Engine:</span> not loaded
-    </span>
+    <button
+      type="button"
+      onClick={onClick}
+      title={engine.label || undefined}
+      className="inline-flex h-7 max-w-56 items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+    >
+      <span className={`size-1.5 shrink-0 rounded-full ${PILL_DOT[engine.state]}`} />
+      <span className="truncate">
+        {engine.state === "ready" && engine.label ? engine.label : <><span className="hidden sm:inline">Engine: </span>{PILL_TEXT[engine.state]}</>}
+      </span>
+    </button>
   );
 }
 
@@ -91,6 +103,8 @@ interface Props {
   active: ScreenId;
   onSelect: (id: ScreenId) => void;
   title: string;
+  engine: EngineDisplay;
+  onEngineClick?: () => void;
   /** Small counters next to nav items, e.g. active downloads. */
   badges?: Badges;
   /** Shown at the bottom of the sidebar when a new version exists. */
@@ -98,7 +112,7 @@ interface Props {
   children: ReactNode;
 }
 
-export function AppShell({ active, onSelect, title, badges, update, children }: Props) {
+export function AppShell({ active, onSelect, title, engine, onEngineClick, badges, update, children }: Props) {
   const [drawer, setDrawer] = useState(false);
 
   useEffect(() => {
@@ -180,7 +194,7 @@ export function AppShell({ active, onSelect, title, badges, update, children }: 
             )}
           </button>
           <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{title}</h1>
-          <EnginePill />
+          <EnginePill engine={engine} onClick={onEngineClick} />
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>

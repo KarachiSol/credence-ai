@@ -11,7 +11,19 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 - Responsive app shell and Models screen with the Recommended list.
 - Model downloads from Hugging Face (`src-tauri/src/downloads.rs`): resume after pause or restart, SHA-256 check, Downloads and My models screens. Set `HF_ENDPOINT` to use a mirror.
 - Auto update (see below).
-- Not yet: Colibri engine, chat, settings. Agent plans: [docs/agent-and-memory-roadmap.md](docs/agent-and-memory-roadmap.md).
+- Chat with an agent (`src/lib/agent.ts`): streaming replies, thinking, tool calls with permission, sources. Chats saved in local SQLite.
+- Engine (`src-tauri/src/engine.rs`): starts `coli serve` for a downloaded model (runs `coli import` for GGUF first). Or connect to any OpenAI-compatible server (Settings → Other server).
+- Tools (`src/lib/tools.ts`): web search (DuckDuckGo or Brave, reads the top pages automatically), read web page, create / read / list files in the workspace folder (Documents/Credence), remember / forget, current time.
+- Memory (`src/lib/memory.ts`): learns facts and preferences from chats, puts the relevant ones in the prompt, Memory screen to view / edit / delete. Works with any model.
+- Plans: [docs/agent-and-memory-roadmap.md](docs/agent-and-memory-roadmap.md).
+
+### Trying the agent
+
+1. Download the [Colibri release](https://github.com/JustVugg/colibri/releases) for your OS and unzip it.
+2. Settings → Model engine → Colibri folder: the unzipped folder.
+3. Download a model (Qwen3 8B or bigger works best as an agent), then Chat → Start.
+
+Already run a model server (Colibri by hand, LM Studio, Ollama)? Settings → Other server, then Chat → Connect.
 
 ## Get the Windows installer (no Rust needed)
 
@@ -24,7 +36,7 @@ Prerequisites: [Bun](https://bun.sh) 1.2+, Rust (stable), and the [Tauri system 
 ```bash
 bun install
 bun run tauri dev     # desktop app with the real hardware scan
-bun run dev           # browser only: sample 16 GB laptop, fake downloads (add ?demo-update for the update popup)
+bun run dev           # browser only: sample laptop, fake downloads, demo chat model (add ?demo-update for the update popup)
 bun run test          # fit score tests (Vitest; plain `bun test` uses Bun's own runner, so use `bun run test`)
 bun run typecheck
 ```

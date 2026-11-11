@@ -2,18 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell, NAV, type ScreenId } from "./components/AppShell";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { isActive, useDownloads } from "./lib/downloads";
+import { useEngine } from "./lib/engine";
 import { scanHardware } from "./lib/hardware";
+import { useSettings } from "./lib/settings";
 import { useUpdater } from "./lib/updater";
 import type { HardwareProfile } from "./lib/types";
-import { ComingSoon } from "./screens/ComingSoon";
+import { ChatScreen } from "./screens/ChatScreen";
 import { DownloadsScreen } from "./screens/DownloadsScreen";
+import { MemoryScreen } from "./screens/MemoryScreen";
 import { ModelsScreen } from "./screens/ModelsScreen";
 import { MyModelsScreen } from "./screens/MyModelsScreen";
-
-const SOON: Record<"chat" | "settings", string> = {
-  chat: "Chat with your downloaded models, fully offline.",
-  settings: "Models folder, memory reserve and your Hugging Face token.",
-};
+import { SettingsScreen } from "./screens/SettingsScreen";
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("models");
@@ -49,6 +48,9 @@ export default function App() {
   }, [update.status]);
   const hasUpdate = update.status !== "idle" && update.version;
 
+  const { settings, update: updateSettings } = useSettings();
+  const engine = useEngine(settings);
+  const [memoryVersion, setMemoryVersion] = useState(0);
   const downloads = useDownloads();
   const activeDownloads = downloads.jobList.filter((j) => isActive(j.status)).length;
 
@@ -59,6 +61,8 @@ export default function App() {
       active={screen}
       onSelect={setScreen}
       title={title}
+      engine={{ state: engine.info.state, label: engine.info.label }}
+      onEngineClick={() => setScreen("chat")}
       badges={{ downloads: activeDownloads, "my-models": downloads.installed.length }}
       update={hasUpdate ? { version: update.version!, onOpen: () => setUpdateOpen(true) } : null}
     >
@@ -74,8 +78,31 @@ export default function App() {
         />
       )}
       {screen === "downloads" && <DownloadsScreen downloads={downloads} onBrowse={() => setScreen("models")} />}
-      {screen === "my-models" && <MyModelsScreen downloads={downloads} onBrowse={() => setScreen("models")} />}
-      {(screen === "chat" || screen === "settings") && <ComingSoon title={title} text={SOON[screen]} />}
+      {screen === "my-models" && (
+        <MyModelsScreen
+          downloads={downloads}
+          onBrowse={() => setScreen("models")}
+          onChat={(m) => {
+            setScreen("chat");
+            if (settings.engineMode === "colibri") void engine.start(m);
+          }}
+        />
+      )}
+      {/* Chat stays mounted so a running reply is not lost when switching screens. */}
+      <div className={screen === "chat" ? "h-full" : "hidden"}>
+        <ChatScreen
+          settings={settings}
+          engine={engine}
+          downloads={downloads}
+          onOpenSettings={() => setScreen("settings")}
+          onBrowseModels={() => setScreen("models")}
+          onMemoryChanged={() => setMemoryVersion((v) => v + 1)}
+        />
+      </div>
+      {screen === "memory" && (
+        <MemoryScreen settings={settings} version={memoryVersion} onToggle={(memoryEnabled) => updateSettings({ memoryEnabled })} />
+      )}
+      {screen === "settings" && <SettingsScreen settings={settings} update={updateSettings} />}
       <UpdateDialog open={updateOpen} state={update} onInstall={install} onLater={() => setUpdateOpen(false)} />
     </AppShell>
   );

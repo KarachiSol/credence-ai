@@ -4,7 +4,15 @@ import { IconBox, IconChat, IconFolder, IconTrash } from "../components/icons";
 import type { Downloads, InstalledModel } from "../lib/downloads";
 import { bytes, date } from "../lib/format";
 
-export function MyModelsScreen({ downloads, onBrowse }: { downloads: Downloads; onBrowse: () => void }) {
+export function MyModelsScreen({
+  downloads,
+  onBrowse,
+  onChat,
+}: {
+  downloads: Downloads;
+  onBrowse: () => void;
+  onChat: (m: InstalledModel) => void;
+}) {
   const [toDelete, setToDelete] = useState<InstalledModel | null>(null);
   const total = downloads.installed.reduce((s, m) => s + m.sizeBytes, 0);
 
@@ -62,9 +70,8 @@ export function MyModelsScreen({ downloads, onBrowse }: { downloads: Downloads; 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled
-                  title="Chat is coming in the next step"
-                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => onChat(m)}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700"
                 >
                   <IconChat width={16} height={16} />
                   Chat

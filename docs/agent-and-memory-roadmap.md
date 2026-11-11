@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft, after MVP |
+| Status | Phase 1 and 2 built (2026-11-11), first test pending |
 | Date | 2026-11-11 |
 | Depends on | `docs/mvp-requirements-and-hardware-model-fit.md` (MVP: download, engine, chat) |
 
@@ -98,9 +98,9 @@ Rules: every tool call is shown in the chat ("Credence wants to read `notes.md` 
 
 | Phase | What | Needs |
 |---|---|---|
-| 0 (MVP) | Download, engine, chat | In progress |
-| 1 | Memory: extraction, injection, "What Credence knows" screen, keyword search | Phase 0 |
-| 2 | Tools A + agent loop + permission UI | Phase 1 |
+| 0 (MVP) | Download, engine, chat | Built |
+| 1 | Memory: extraction, injection, "What Credence knows" screen, keyword search | Built |
+| 2 | Tools A + web search (Tools B search part) + agent loop + permission UI | Built |
 | 3 | Embedding search, episodes, smarter recall | Embeddings decision |
 | 4 | Tools B and C | Phase 2 stable |
 | 5 | Cloud model providers (memory stays local, user chooses what is sent) | Accounts / API keys, much later |
