@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Markdown } from "../components/Markdown";
+import { BrandTile } from "../components/BrandMark";
 import {
   IconBrain,
   IconCheck,
@@ -489,9 +490,7 @@ const SUGGESTIONS = [
 function EmptyChat({ onPick }: { onPick: (t: string) => void }) {
   return (
     <div className="py-6 text-center sm:py-10">
-      <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-        <IconBrain />
-      </div>
+      <BrandTile className="mx-auto size-12" />
       <h2 className="mt-4 text-xl font-semibold tracking-tight">How can I help?</h2>
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">I can search the web, save files and remember what matters to you.</p>
       <div className="mt-6 grid grid-cols-1 gap-2 text-left sm:grid-cols-2">
