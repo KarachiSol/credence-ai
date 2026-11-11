@@ -20,7 +20,9 @@ function Logo() {
   );
 }
 
-function NavList({ active, onSelect }: { active: ScreenId; onSelect: (id: ScreenId) => void }) {
+type Badges = Partial<Record<ScreenId, number>>;
+
+function NavList({ active, onSelect, badges }: { active: ScreenId; onSelect: (id: ScreenId) => void; badges?: Badges }) {
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5">
       {NAV.map(({ id, label, icon: Icon }) => {
@@ -38,7 +40,18 @@ function NavList({ active, onSelect }: { active: ScreenId; onSelect: (id: Screen
             }`}
           >
             <Icon width={18} height={18} />
-            {label}
+            <span className="flex-1 text-left">{label}</span>
+            {!!badges?.[id] && (
+              <span
+                className={`min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold ${
+                  on
+                    ? "bg-brand-600 text-white"
+                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                }`}
+              >
+                {badges[id]}
+              </span>
+            )}
           </button>
         );
       })}
@@ -78,12 +91,14 @@ interface Props {
   active: ScreenId;
   onSelect: (id: ScreenId) => void;
   title: string;
+  /** Small counters next to nav items, e.g. active downloads. */
+  badges?: Badges;
   /** Shown at the bottom of the sidebar when a new version exists. */
   update?: { version: string; onOpen: () => void } | null;
   children: ReactNode;
 }
 
-export function AppShell({ active, onSelect, title, update, children }: Props) {
+export function AppShell({ active, onSelect, title, badges, update, children }: Props) {
   const [drawer, setDrawer] = useState(false);
 
   useEffect(() => {
@@ -105,7 +120,7 @@ export function AppShell({ active, onSelect, title, update, children }: Props) {
         <div className="px-1.5">
           <Logo />
         </div>
-        <NavList active={active} onSelect={select} />
+        <NavList active={active} onSelect={select} badges={badges} />
         <div className="mt-auto flex flex-col gap-3">
           {update && <UpdateButton version={update.version} onClick={update.onOpen} />}
           <p className="px-2.5 text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
@@ -135,7 +150,7 @@ export function AppShell({ active, onSelect, title, update, children }: Props) {
                 <IconClose />
               </button>
             </div>
-            <NavList active={active} onSelect={select} />
+            <NavList active={active} onSelect={select} badges={badges} />
             {update && (
               <div className="mt-auto">
                 <UpdateButton

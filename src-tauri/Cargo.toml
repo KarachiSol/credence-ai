@@ -17,6 +17,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = "0.40"
 tauri-plugin-process = "2"
+reqwest = { version = "0.13", default-features = false, features = ["stream", "json", "rustls"] }
+futures-util = "0.3"
+sha2 = "0.11"
+tokio = { version = "1", features = ["fs", "io-util", "time", "sync"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

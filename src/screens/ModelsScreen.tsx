@@ -4,6 +4,7 @@ import { HardwareCard } from "../components/HardwareCard";
 import { ModelCard } from "../components/ModelCard";
 import { IconSearch } from "../components/icons";
 import { CATALOG } from "../lib/catalog";
+import type { Downloads } from "../lib/downloads";
 import { rankModels, recommendedModels } from "../lib/fit";
 import type { FitLabel, HardwareProfile } from "../lib/types";
 
@@ -21,9 +22,13 @@ interface Props {
   scanning: boolean;
   error: string | null;
   onRescan: () => void;
+  downloads: Downloads;
+  onShowDownloads: () => void;
+  onShowInstalled: () => void;
 }
 
-export function ModelsScreen({ hw, scanning, error, onRescan }: Props) {
+export function ModelsScreen({ hw, scanning, error, onRescan, downloads, onShowDownloads, onShowInstalled }: Props) {
+  const cardProps = { downloads, onShowDownloads, onShowInstalled };
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -58,7 +63,7 @@ export function ModelsScreen({ hw, scanning, error, onRescan }: Props) {
           </p>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {top.map((r) => (
-              <ModelCard key={r.model.id} item={r} />
+              <ModelCard key={r.model.id} item={r} {...cardProps} />
             ))}
           </div>
         </section>
@@ -113,7 +118,7 @@ export function ModelsScreen({ hw, scanning, error, onRescan }: Props) {
           {shown.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {shown.map((r) => (
-                <ModelCard key={r.model.id} item={r} />
+                <ModelCard key={r.model.id} item={r} {...cardProps} />
               ))}
             </div>
           ) : (

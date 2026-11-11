@@ -9,7 +9,9 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 - Hardware scan in Rust (`src-tauri/src/hardware.rs`): CPU, RAM, GPU, models drive.
 - Fit score (`src/lib/fit.ts`) with unit tests (`src/lib/fit.test.ts`).
 - Responsive app shell and Models screen with the Recommended list.
-- Not yet: downloads, Colibri engine, chat, settings.
+- Model downloads from Hugging Face (`src-tauri/src/downloads.rs`): resume after pause or restart, SHA-256 check, Downloads and My models screens. Set `HF_ENDPOINT` to use a mirror.
+- Auto update (see below).
+- Not yet: Colibri engine, chat, settings. Agent plans: [docs/agent-and-memory-roadmap.md](docs/agent-and-memory-roadmap.md).
 
 ## Get the Windows installer (no Rust needed)
 
@@ -22,7 +24,7 @@ Prerequisites: [Bun](https://bun.sh) 1.2+, Rust (stable), and the [Tauri system 
 ```bash
 bun install
 bun run tauri dev     # desktop app with the real hardware scan
-bun run dev           # browser only, uses a sample 16 GB laptop profile
+bun run dev           # browser only: sample 16 GB laptop, fake downloads (add ?demo-update for the update popup)
 bun run test          # fit score tests (Vitest; plain `bun test` uses Bun's own runner, so use `bun run test`)
 bun run typecheck
 ```

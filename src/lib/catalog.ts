@@ -4,6 +4,8 @@ import type { CatalogModel } from "./types";
  * Curated starter catalog. RAM numbers for the big models come from the
  * Colibri README (github.com/JustVugg/colibri, checked 2026-11-10).
  * Sizes and active parameters marked "estimate" must be verified before release.
+ * `file` is a file or folder inside `hfRepo`; "" downloads the whole repo (Colibri containers).
+ * TODO before release: confirm repo + file for OLMoE and DeepSeek (placeholders today).
  */
 export const CATALOG: CatalogModel[] = [
   {
@@ -133,7 +135,7 @@ export const CATALOG: CatalogModel[] = [
     qualityRank: 95,
     tags: ["Reasoning", "Frontier", "Large"],
     variants: [
-      { quant: "INT4", bitsPerWeight: 4.5, sizeGB: 429, ramMinGB: 16, ramGoodGB: 24, file: "colibri-int4-g64" },
+      { quant: "INT4", bitsPerWeight: 4.5, sizeGB: 429, ramMinGB: 16, ramGoodGB: 24, file: "" },
     ],
   },
 ];

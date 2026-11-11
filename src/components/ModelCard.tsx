@@ -1,16 +1,35 @@
 import { useId, useState } from "react";
+import { isActive, jobId, specFor, type Downloads } from "../lib/downloads";
 import type { ModelFit } from "../lib/fit";
 import { gb, params, tokPerSec } from "../lib/format";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { FIT_TEXT, FitBadge } from "./FitBadge";
-import { IconChevron, IconDownload, IconWarn } from "./icons";
+import { IconCheck, IconChevron, IconDownload, IconPlay, IconWarn } from "./icons";
 
-export function ModelCard({ item }: { item: ModelFit }) {
+interface Props {
+  item: ModelFit;
+  downloads: Downloads;
+  /** Opens the Downloads screen. */
+  onShowDownloads: () => void;
+  /** Opens the My models screen. */
+  onShowInstalled: () => void;
+}
+
+export function ModelCard({ item, downloads, onShowDownloads, onShowInstalled }: Props) {
   const { model, variantFits } = item;
   const [quant, setQuant] = useState(item.variant.quant);
   const [showWhy, setShowWhy] = useState(false);
   const whyId = useId();
   const current = variantFits.find((v) => v.variant.quant === quant) ?? variantFits[0];
   const { variant, fit } = current;
+  const [confirmAnyway, setConfirmAnyway] = useState(false);
+
+  const id = jobId(model.id, variant.quant);
+  const job = downloads.jobs.get(id);
+  const installed = downloads.installedIds.has(id);
+  const startDownload = () => {
+    void downloads.start(specFor(model, variant), variant.sizeGB);
+  };
 
   return (
     <article className="@container flex h-full flex-col rounded-2xl border border-zinc-200 bg-white p-4 transition-shadow hover:shadow-sm sm:p-5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -131,17 +150,110 @@ export function ModelCard({ item }: { item: ModelFit }) {
           >
             {showWhy ? "Hide details" : "Why?"}
           </button>
-          <button
-            type="button"
-            disabled
-            title="Downloads are coming in the next step"
-            className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <IconDownload width={16} height={16} />
-            Download
-          </button>
+          <DownloadButton
+            installed={installed}
+            active={job ? isActive(job.status) : false}
+            progress={job && job.totalBytes ? job.doneBytes / job.totalBytes : 0}
+            resumable={job?.status === "paused" || job?.status === "error"}
+            noSpace={fit.diskOk === false}
+            wontRun={fit.label === "wont-run"}
+            onDownload={() => (fit.label === "wont-run" ? setConfirmAnyway(true) : startDownload())}
+            onShowDownloads={onShowDownloads}
+            onShowInstalled={onShowInstalled}
+          />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmAnyway}
+        title="This model will very likely fail"
+        confirmText="Download anyway"
+        onCancel={() => setConfirmAnyway(false)}
+        onConfirm={() => {
+          setConfirmAnyway(false);
+          startDownload();
+        }}
+      >
+        {fit.reason} It is a {gb(variant.sizeGB)} download. Do you still want to download it?
+      </ConfirmDialog>
     </article>
+  );
+}
+
+const PRIMARY =
+  "inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed";
+
+interface ButtonProps {
+  installed: boolean;
+  active: boolean;
+  progress: number;
+  resumable: boolean;
+  noSpace: boolean;
+  wontRun: boolean;
+  onDownload: () => void;
+  onShowDownloads: () => void;
+  onShowInstalled: () => void;
+}
+
+function DownloadButton(p: ButtonProps) {
+  if (p.installed) {
+    return (
+      <button
+        type="button"
+        onClick={p.onShowInstalled}
+        className={`${PRIMARY} border border-emerald-600/25 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:text-emerald-300`}
+      >
+        <IconCheck width={16} height={16} />
+        Installed
+      </button>
+    );
+  }
+  if (p.active) {
+    return (
+      <button
+        type="button"
+        onClick={p.onShowDownloads}
+        className={`${PRIMARY} relative overflow-hidden border border-brand-600/30 text-brand-700 dark:text-brand-400`}
+      >
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 bg-brand-50 transition-[width] duration-300 dark:bg-brand-500/15"
+          style={{ width: `${Math.round(p.progress * 100)}%` }}
+        />
+        <span className="relative">Downloading {Math.round(p.progress * 100)}%</span>
+      </button>
+    );
+  }
+  if (p.noSpace) {
+    return (
+      <button type="button" disabled className={`${PRIMARY} bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500`}>
+        Not enough space
+      </button>
+    );
+  }
+  if (p.resumable) {
+    return (
+      <button type="button" onClick={p.onDownload} className={`${PRIMARY} bg-brand-600 text-white hover:bg-brand-700`}>
+        <IconPlay width={16} height={16} />
+        Resume
+      </button>
+    );
+  }
+  if (p.wontRun) {
+    return (
+      <button
+        type="button"
+        onClick={p.onDownload}
+        className={`${PRIMARY} border border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800`}
+      >
+        Download anyway
+      </button>
+    );
+  }
+  return (
+    <button type="button" onClick={p.onDownload} className={`${PRIMARY} bg-brand-600 text-white hover:bg-brand-700`}>
+      <IconDownload width={16} height={16} />
+      Download
+    </button>
   );
 }
