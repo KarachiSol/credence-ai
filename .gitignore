@@ -4,3 +4,6 @@ src-tauri/target/
 src-tauri/gen/schemas/
 *.log
 .DS_Store
+
+# Built by scripts/build-colibri-engines.sh in CI
+src-tauri/resources/colibri-engines-linux.tar.gz

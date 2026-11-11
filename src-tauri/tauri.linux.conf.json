@@ -1,0 +1,15 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/colibri-engines-linux.tar.gz": "colibri-engines-linux.tar.gz"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["python3", "libgomp1"]
+      },
+      "rpm": {
+        "depends": ["python3", "libgomp"]
+      }
+    }
+  }
+}
