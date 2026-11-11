@@ -1,0 +1,103 @@
+name: Desktop build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Type check and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: bun install --frozen-lockfile
+      - run: bun run tauri build
+      - name: Upload installers
+        uses: actions/upload-artifact@v6
+        with:
+          name: credence-ai-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux packages (Ubuntu)
+    # 22.04 so the app also runs on older Ubuntu / Debian / Mint (older glibc).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      # Colibri's own Linux engines need a very new glibc; build them on this older Ubuntu.
+      - name: Install Colibri build tools
+        run: sudo apt-get install -y libvulkan-dev
+      - name: Cache Colibri engines
+        id: colibri-cache
+        uses: actions/cache@v5
+        with:
+          path: src-tauri/resources/colibri-engines-linux.tar.gz
+          key: colibri-engines-${{ hashFiles('colibri-version.txt', 'scripts/build-colibri-engines.sh') }}-ubuntu-22.04
+      - name: Build Colibri engines
+        if: steps.colibri-cache.outputs.cache-hit != 'true'
+        run: scripts/build-colibri-engines.sh
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: bun install --frozen-lockfile
+      - run: bun run tauri build
+      # One artifact per format, so testers download only the one they need.
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v6
+        with:
+          name: credence-ai-linux-appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload .deb (Ubuntu, Debian, Mint)
+        uses: actions/upload-artifact@v6
+        with:
+          name: credence-ai-linux-deb
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload .rpm (Fedora, openSUSE)
+        uses: actions/upload-artifact@v6
+        with:
+          name: credence-ai-linux-rpm
+          path: src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 14

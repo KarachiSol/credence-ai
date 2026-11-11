@@ -1,0 +1,28 @@
+[package]
+name = "credence-ai"
+version = "0.1.0"
+description = "Run big AI models locally on normal computers"
+edition = "2021"
+
+[lib]
+name = "credence_ai_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.40"
+tauri-plugin-process = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-http = "2"
+reqwest = { version = "0.13", default-features = false, features = ["stream", "json", "rustls", "form"] }
+futures-util = "0.3"
+sha2 = "0.11"
+tokio = { version = "1", features = ["fs", "io-util", "time", "sync"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
