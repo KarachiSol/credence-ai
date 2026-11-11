@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell, NAV, type ScreenId } from "./components/AppShell";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { ensureColibri } from "./lib/colibri";
 import { isActive, useDownloads } from "./lib/downloads";
 import { useEngine } from "./lib/engine";
 import { scanHardware } from "./lib/hardware";
@@ -50,6 +51,11 @@ export default function App() {
 
   const { settings, update: updateSettings } = useSettings();
   const engine = useEngine(settings);
+  // Fetch the built-in engine in the background on first launch, so Start is instant later.
+  const usesBuiltIn = settings.engineMode === "colibri" && !settings.colibriDir.trim();
+  useEffect(() => {
+    if (usesBuiltIn) void ensureColibri().catch(() => {});
+  }, [usesBuiltIn]);
   const [memoryVersion, setMemoryVersion] = useState(0);
   const downloads = useDownloads();
   const activeDownloads = downloads.jobList.filter((j) => isActive(j.status)).length;

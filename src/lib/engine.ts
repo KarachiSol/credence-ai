@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ensureColibri } from "./colibri";
 import type { InstalledModel } from "./downloads";
 import { listModels, type Provider } from "./llm";
 import { invoke, isTauri } from "./platform";
@@ -69,8 +70,24 @@ export function useEngine(settings: Settings) {
         return;
       }
       try {
-        if (!settings.colibriDir.trim()) throw new Error("Set the Colibri folder in Settings first.");
-        await invoke("engine_start", { colibriDir: settings.colibriDir, modelDir: model.path });
+        const builtIn = async () => {
+          // Use (and if needed download) the engine Credence manages itself.
+          const colibri = await ensureColibri();
+          if (!colibri.python) throw new Error(`The Colibri engine needs Python 3.10 or newer. ${colibri.pythonHint}`);
+          if (attempt.current === my) await invoke("engine_start", { colibriDir: "", modelDir: model.path });
+        };
+        if (!settings.colibriDir.trim()) {
+          await builtIn();
+        } else {
+          try {
+            await invoke("engine_start", { colibriDir: settings.colibriDir, modelDir: model.path });
+          } catch (e) {
+            // Their folder has no Colibri in it: fall back to the built-in engine.
+            if (!String(e).includes("launcher (coli) not found")) throw e;
+            await builtIn();
+          }
+        }
+        if (attempt.current !== my) return;
         const ids = await waitUntilReady(settings.colibriUrl, undefined, my, true);
         if (attempt.current !== my) return;
         setInfo((i) => ({

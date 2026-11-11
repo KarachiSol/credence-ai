@@ -1,3 +1,4 @@
+mod colibri_setup;
 mod downloads;
 mod engine;
 mod hardware;
@@ -52,15 +53,55 @@ async fn installed_delete(downloads: State<'_, Manager>, id: String) -> Result<(
 
 // ---- Engine (Colibri) ----
 
+/// One install at a time.
+#[derive(Default)]
+struct InstallLock(tokio::sync::Mutex<()>);
+
+#[tauri::command]
+async fn colibri_info(app: tauri::AppHandle) -> Result<colibri_setup::ColibriInfo, String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || colibri_setup::info(&data))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn colibri_install(app: tauri::AppHandle, lock: State<'_, InstallLock>) -> Result<colibri_setup::ColibriInfo, String> {
+    let _guard = lock.0.lock().await;
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let handle = app.clone();
+    let emit = move |p: colibri_setup::Progress| {
+        let _ = handle.emit("colibri-setup", p);
+    };
+    let result = colibri_setup::install(&data, &emit).await;
+    if let Err(e) = &result {
+        let _ = app.emit(
+            "colibri-setup",
+            colibri_setup::Progress { phase: "error".into(), done: 0, total: 0, message: Some(e.clone()) },
+        );
+    }
+    result
+}
+
 #[tauri::command]
 async fn engine_start(
+    app: tauri::AppHandle,
     engine: State<'_, engine::Engine>,
     colibri_dir: String,
     model_dir: String,
 ) -> Result<engine::EngineStatus, String> {
     let engine = engine.inner().clone();
+    // No folder chosen: use the engine Credence installed itself.
+    let dir = if colibri_dir.trim().is_empty() {
+        let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        colibri_setup::installed_dir(&data)
+            .map(|(d, _)| d)
+            .ok_or("The Colibri engine is not installed yet.")?
+    } else {
+        engine::expand_home(colibri_dir.trim())
+    };
     tauri::async_runtime::spawn_blocking(move || {
-        engine.start(&engine::expand_home(colibri_dir.trim()), &PathBuf::from(model_dir), &[])
+        engine.start(&dir, &PathBuf::from(model_dir), &[])
     })
     .await
     .map_err(|e| e.to_string())?
@@ -264,6 +305,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_http::init())
         .manage(engine::Engine::default())
+        .manage(InstallLock::default())
         .setup(|app| {
             #[cfg(desktop)]
             app.handle()
@@ -289,6 +331,8 @@ pub fn run() {
             installed_list,
             installed_delete,
             open_models_folder,
+            colibri_info,
+            colibri_install,
             engine_start,
             engine_stop,
             engine_status,
