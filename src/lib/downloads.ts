@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CatalogModel, ModelVariant } from "./types";
 
 /** Mirrors `downloads.rs`. */
@@ -197,7 +197,15 @@ export function useDownloads() {
     if (isTauri()) await invoke("open_models_folder");
   }, []);
 
-  const jobList = useMemo(() => [...jobs.values()].sort((a, b) => b.updatedAtMs - a.updatedAtMs), [jobs]);
+  // Stable order: newest job first, by when it first appeared. Sorting by last update made
+  // two running downloads swap places on every progress tick.
+  const firstSeen = useRef(new Map<string, number>());
+  const jobList = useMemo(() => {
+    const seen = firstSeen.current;
+    const fresh = [...jobs.values()].filter((j) => !seen.has(j.id)).sort((a, b) => a.updatedAtMs - b.updatedAtMs);
+    for (const j of fresh) seen.set(j.id, seen.size);
+    return [...jobs.values()].sort((a, b) => (seen.get(b.id) ?? 0) - (seen.get(a.id) ?? 0));
+  }, [jobs]);
   const installedIds = useMemo(() => new Set(installed.map((i) => i.id)), [installed]);
 
   return { jobs, jobList, installed, installedIds, start, pause, resume, remove, deleteInstalled, openFolder };
