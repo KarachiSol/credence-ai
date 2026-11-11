@@ -35,33 +35,94 @@ pub struct Engine {
     logs: Arc<Mutex<VecDeque<String>>>,
 }
 
-fn launcher(colibri_dir: &Path) -> Result<PathBuf, String> {
-    let names: &[&str] = if cfg!(windows) { &["coli.cmd", "coli.bat", "coli.exe"] } else { &["coli"] };
-    for n in names {
-        let p = colibri_dir.join(n);
-        if p.is_file() {
-            return Ok(p);
+/// `~/colibri` -> `/home/me/colibri`.
+pub fn expand_home(p: &str) -> PathBuf {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
+    match (p.strip_prefix("~/").or_else(|| p.strip_prefix("~\\")), home) {
+        (Some(rest), Some(h)) => PathBuf::from(h).join(rest),
+        _ if p == "~" => std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(p)),
+        _ => PathBuf::from(p),
+    }
+}
+
+const LAUNCHER_NAMES: &[&str] = if cfg!(windows) { &["coli.cmd", "coli.bat", "coli.exe", "coli"] } else { &["coli"] };
+
+/// Folders that may hold the launcher: the folder itself, its `c/` (a source
+/// checkout keeps `coli` there), and the same one level down, because release
+/// archives usually unpack into their own subfolder.
+fn launcher_candidates(colibri_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![colibri_dir.to_path_buf(), colibri_dir.join("c")];
+    if let Ok(rd) = std::fs::read_dir(colibri_dir) {
+        let mut subs: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        subs.sort();
+        for s in subs {
+            dirs.push(s.join("c"));
+            dirs.push(s);
         }
     }
-    Err(format!(
-        "Colibri launcher ({}) not found in {}. Pick the folder you unzipped Colibri into.",
-        names[0],
-        colibri_dir.display()
-    ))
+    dirs
+}
+
+fn launcher(colibri_dir: &Path) -> Result<PathBuf, String> {
+    for dir in launcher_candidates(colibri_dir) {
+        for n in LAUNCHER_NAMES {
+            let p = dir.join(n);
+            if p.is_file() {
+                // Absolute, because the command runs with the launcher's folder as cwd.
+                return Ok(std::path::absolute(&p).unwrap_or(p));
+            }
+        }
+    }
+    let hint = if cfg!(windows) {
+        "Pick the folder you unzipped the Colibri release into (it has coli.cmd)."
+    } else {
+        "Pick the folder you unzipped the Colibri release into, or your colibri git checkout (coli is in its c/ folder)."
+    };
+    Err(format!("Colibri launcher (coli) not found in {} or its subfolders. {hint}", colibri_dir.display()))
+}
+
+#[cfg(unix)]
+fn is_executable(p: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(p).map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
 }
 
 fn command(launcher: &Path) -> Command {
-    let is_script = launcher
-        .extension()
-        .map(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"))
-        .unwrap_or(false);
-    let mut c = if is_script {
+    let ext = launcher.extension().map(|e| e.to_ascii_lowercase());
+    let is_batch = ext.as_deref().is_some_and(|e| e == "cmd" || e == "bat");
+    let is_exe = ext.as_deref().is_some_and(|e| e == "exe");
+    let mut c = if is_batch {
         let mut c = Command::new("cmd");
         c.arg("/C").arg(launcher);
         c
-    } else {
+    } else if is_exe {
         Command::new(launcher)
+    } else if cfg!(windows) {
+        // A source checkout: `coli` is a Python script.
+        let mut c = Command::new("py");
+        c.arg("-3").arg(launcher);
+        c
+    } else {
+        // `coli` is a Python script. Unzipping can drop the executable bit, so run it
+        // through python3 unless it is marked executable.
+        #[cfg(unix)]
+        let direct = is_executable(launcher);
+        #[cfg(not(unix))]
+        let direct = true;
+        if direct {
+            Command::new(launcher)
+        } else {
+            let mut c = Command::new("python3");
+            c.arg(launcher);
+            c
+        }
     };
+    // Own process group, so stopping also ends the engine the launcher starts.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        c.process_group(0);
+    }
     if let Some(dir) = launcher.parent() {
         c.current_dir(dir);
     }
@@ -215,10 +276,50 @@ impl Engine {
                     .creation_flags(0x0800_0000)
                     .status();
             }
+            #[cfg(unix)]
+            {
+                let _ = Command::new("kill").args(["-TERM", "--", &format!("-{}", child.id())]).status();
+                for _ in 0..20 {
+                    if matches!(child.try_wait(), Ok(Some(_))) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                let _ = Command::new("kill").args(["-KILL", "--", &format!("-{}", child.id())]).status();
+            }
             let _ = child.kill();
             let _ = child.wait();
             self.log("Engine stopped.".into());
         }
         inner.model_dir = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_launcher_in_checkout_and_subfolder() {
+        let root = std::env::temp_dir().join(format!("credence-launcher-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let name = if cfg!(windows) { "coli.cmd" } else { "coli" };
+        // A git checkout: <root>/colibri/c/coli, user picked <root>.
+        std::fs::create_dir_all(root.join("colibri/c")).unwrap();
+        std::fs::write(root.join("colibri/c").join(name), "").unwrap();
+        let want = std::path::absolute(root.join("colibri/c").join(name)).unwrap();
+        assert_eq!(launcher(&root).unwrap(), want);
+        assert_eq!(launcher(&root.join("colibri")).unwrap(), want);
+        assert!(launcher(&root.join("colibri/c/missing")).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn expands_home() {
+        let home = std::env::var("HOME").unwrap_or_default();
+        if !cfg!(windows) && !home.is_empty() {
+            assert_eq!(expand_home("~/colibri"), PathBuf::from(&home).join("colibri"));
+        }
+        assert_eq!(expand_home("/opt/colibri"), PathBuf::from("/opt/colibri"));
     }
 }

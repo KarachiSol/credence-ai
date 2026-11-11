@@ -60,7 +60,7 @@ async fn engine_start(
 ) -> Result<engine::EngineStatus, String> {
     let engine = engine.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        engine.start(&PathBuf::from(colibri_dir), &PathBuf::from(model_dir), &[])
+        engine.start(&engine::expand_home(colibri_dir.trim()), &PathBuf::from(model_dir), &[])
     })
     .await
     .map_err(|e| e.to_string())?

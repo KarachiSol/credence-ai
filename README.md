@@ -19,8 +19,8 @@ Requirements and the fit-score formula: [docs/mvp-requirements-and-hardware-mode
 
 ### Trying the agent
 
-1. Download the [Colibri release](https://github.com/JustVugg/colibri/releases) for your OS and unzip it.
-2. Settings → Model engine → Colibri folder: the unzipped folder.
+1. Get Colibri. Either download the [Colibri release](https://github.com/JustVugg/colibri/releases) for your OS and unzip it, or on Linux: `sudo apt install git python3 build-essential && git clone https://github.com/JustVugg/colibri ~/colibri && cd ~/colibri && ./start-here.sh`. Python 3 is needed either way.
+2. Settings → Model engine → Colibri folder: the unzipped folder or the checkout (for example `~/colibri`). Credence finds `coli` inside it, including the `c/` subfolder.
 3. Download a model (Qwen3 8B or bigger works best as an agent), then Chat → Start.
 
 Already run a model server (Colibri by hand, LM Studio, Ollama)? Settings → Other server, then Chat → Connect.

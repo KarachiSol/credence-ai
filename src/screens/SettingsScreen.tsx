@@ -79,8 +79,9 @@ export function SettingsScreen({ settings: s, update }: Props) {
               label="Colibri folder"
               hint={
                 <>
-                  The folder where you unzipped the Colibri release (it contains <code>coli.cmd</code> on Windows or{" "}
-                  <code>coli</code> on Mac/Linux).
+                  The folder where you unzipped the Colibri release, or your <code>colibri</code> git checkout.
+                  Credence finds <code>coli</code> (or <code>coli.cmd</code> on Windows) inside it, including its{" "}
+                  <code>c/</code> folder. Python 3 must be installed.
                 </>
               }
             >
@@ -88,7 +89,7 @@ export function SettingsScreen({ settings: s, update }: Props) {
                 className={input}
                 value={s.colibriDir}
                 onChange={(e) => update({ colibriDir: e.target.value })}
-                placeholder="C:\\colibri"
+                placeholder={navigator.userAgent.includes("Windows") ? "C:\\colibri" : "~/colibri"}
                 spellCheck={false}
               />
             </Field>
