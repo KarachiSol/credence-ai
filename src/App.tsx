@@ -50,7 +50,7 @@ export default function App() {
   const hasUpdate = update.status !== "idle" && update.version;
 
   const { settings, update: updateSettings } = useSettings();
-  const engine = useEngine(settings);
+  const engine = useEngine(settings, hw);
   // Fetch the built-in engine in the background on first launch, so Start is instant later.
   const usesBuiltIn = settings.engineMode === "colibri" && !settings.colibriDir.trim();
   useEffect(() => {

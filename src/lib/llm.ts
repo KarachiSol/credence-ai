@@ -17,7 +17,10 @@ export interface Provider {
   baseUrl: string;
   model: string;
   apiKey?: string;
-  /** Set to false after the server rejects the `tools` field. */
+  /**
+   * Send tools in the API's `tools` field. False: describe them in the prompt and read calls
+   * from the text instead (small Qwen3 models on Colibri, or a server that rejected `tools`).
+   */
   nativeTools: boolean;
   demo?: boolean;
 }
@@ -57,36 +60,126 @@ export function splitThinking(raw: string): { content: string; thinking: string 
   };
 }
 
-/** Qwen's own text format for tool calls, used when the server does not return structured calls. */
+const newCall = (name: string, args: unknown): ToolCall => ({
+  id: `call_${uid().slice(0, 8)}`,
+  name,
+  arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}),
+});
+
+/** `{"name": …, "arguments": …}`, the JSON form Qwen3 (0.6B to 32B) was trained on. */
+function jsonCall(body: string): ToolCall | null {
+  const text = body
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    const obj = JSON.parse(text) as { name?: unknown; arguments?: unknown; parameters?: unknown };
+    if (typeof obj.name === "string" && obj.name) return newCall(obj.name, obj.arguments ?? obj.parameters);
+  } catch {
+    // Not JSON.
+  }
+  return null;
+}
+
+/** `<function=name><parameter=key>value</parameter></function>`, the XML form of Qwen3.5 / 3.6. */
+function xmlCall(body: string): ToolCall | null {
+  const fn = /<function=([^>\n]+)>([\s\S]*?)(?:<\/function>|$)/.exec(body);
+  if (!fn) return null;
+  const args: Record<string, unknown> = {};
+  for (const m of fn[2].matchAll(/<parameter=([^>\n]+)>([\s\S]*?)(?:<\/parameter>|(?=<parameter=)|$)/g)) {
+    const raw = m[2].replace(/^\n/, "").replace(/\n$/, "");
+    let value: unknown = raw;
+    if (/^\s*[[{]/.test(raw) || /^\s*(-?\d+(\.\d+)?|true|false|null)\s*$/.test(raw)) {
+      try {
+        value = JSON.parse(raw);
+      } catch {
+        value = raw;
+      }
+    }
+    args[m[1].trim()] = value;
+  }
+  return newCall(fn[1].trim(), args);
+}
+
+/**
+ * Tool calls written as text, used when the server does not return structured calls.
+ * Reads Qwen3's JSON form and Qwen3.5/3.6's XML form, also when the model forgot the
+ * closing tag (small models often stop right after the call).
+ */
 export function parseInlineToolCalls(text: string): { content: string; toolCalls: ToolCall[] } {
   const toolCalls: ToolCall[] = [];
-  const content = text.replace(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g, (_, body: string) => {
-    try {
-      const obj = JSON.parse(body) as { name?: string; arguments?: unknown };
-      if (obj.name) {
-        toolCalls.push({
-          id: `call_${uid().slice(0, 8)}`,
-          name: obj.name,
-          arguments: typeof obj.arguments === "string" ? obj.arguments : JSON.stringify(obj.arguments ?? {}),
-        });
-        return "";
-      }
-    } catch {
-      // Not valid JSON: leave it in the text.
-    }
-    return _;
-  });
+  const read = (whole: string, body: string) => {
+    const call = jsonCall(body) ?? xmlCall(body);
+    if (!call) return whole;
+    toolCalls.push(call);
+    return "";
+  };
+  let content = text.replace(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g, read);
+  // An unclosed call at the very end.
+  content = content.replace(/<tool_call>\s*([\s\S]*)$/, read);
+  if (!toolCalls.length) {
+    // A bare <function=…> block with no wrapper.
+    const bare = /<function=[^>\n]+>[\s\S]*?<\/function>/g;
+    content = content.replace(bare, (whole) => read(whole, whole));
+  }
   return { content: content.trim(), toolCalls };
 }
 
+/** Hides a tool call that is still being written, so raw JSON never flashes in the chat. */
+export function hideToolCallText(text: string): string {
+  const i = text.indexOf("<tool_call>");
+  return i === -1 ? text : text.slice(0, i).trimEnd();
+}
+
+/** The `# Tools` system block, word for word as Qwen3's chat template writes it. */
 export function toolProtocolPrompt(tools: ToolSchema[]): string {
   return [
     "# Tools",
-    "You can call these tools. To call one, reply with exactly:",
-    '<tool_call>\n{"name": "tool_name", "arguments": {"arg": "value"}}\n</tool_call>',
-    "Then wait for the result. Available tools:",
-    ...tools.map((t) => JSON.stringify(t.function)),
+    "",
+    "You may call one or more functions to assist with the user query.",
+    "",
+    "You are provided with function signatures within <tools></tools> XML tags:",
+    "<tools>",
+    ...tools.map((t) => JSON.stringify(t)),
+    "</tools>",
+    "",
+    "For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:",
+    "<tool_call>",
+    '{"name": <function-name>, "arguments": <args-json-object>}',
+    "</tool_call>",
   ].join("\n");
+}
+
+/**
+ * Messages for a server that is not given `tools`: the tool list goes into the system
+ * prompt and calls and results are written as text, in the format Qwen3 was trained on.
+ * Results that follow each other share one user turn, as in Qwen3's template.
+ */
+export function withTextTools(messages: LlmMessage[], tools: ToolSchema[]): LlmMessage[] {
+  const [first, ...rest] = messages;
+  const sys = first?.role === "system" ? first.content : "";
+  const out: LlmMessage[] = [{ role: "system", content: sys ? `${sys}\n\n${toolProtocolPrompt(tools)}` : toolProtocolPrompt(tools) }];
+  let prevTool = false;
+  for (const m of first?.role === "system" ? rest : messages) {
+    if (m.role === "tool") {
+      const block = `<tool_response>\n${m.content}\n</tool_response>`;
+      const last = out[out.length - 1];
+      if (prevTool && last.role === "user") last.content += `\n${block}`;
+      else out.push({ role: "user", content: block });
+      prevTool = true;
+      continue;
+    }
+    prevTool = false;
+    if (m.role === "assistant" && m.tool_calls?.length) {
+      const calls = m.tool_calls
+        .map((t) => `<tool_call>\n{"name": ${JSON.stringify(t.function.name)}, "arguments": ${t.function.arguments || "{}"}}\n</tool_call>`)
+        .join("\n");
+      out.push({ role: "assistant", content: m.content ? `${m.content}\n${calls}` : calls });
+      continue;
+    }
+    out.push(m);
+  }
+  return out;
 }
 
 class ToolsUnsupported extends Error {}
@@ -159,7 +252,7 @@ async function streamOpenAI(o: StreamOptions): Promise<ChatResult> {
       chunks++;
       if (!firstTokenAt) firstTokenAt = performance.now();
       const { content, thinking } = splitThinking(raw);
-      o.onDelta?.(content, thinking);
+      o.onDelta?.(hideToolCallText(content), thinking);
     }
   };
 
@@ -190,30 +283,21 @@ async function streamOpenAI(o: StreamOptions): Promise<ChatResult> {
   };
 }
 
-/** Streams one model reply. Falls back to text tool calls if the server rejects `tools`. */
+/**
+ * Streams one model reply. With `nativeTools` the server gets `tools`; without it (or after the
+ * server rejects them) the tools are described in the prompt and calls are read from the text.
+ */
 export async function chat(o: StreamOptions): Promise<ChatResult> {
   if (o.provider.demo) return demoChat(o);
+  if (o.tools?.length && !o.provider.nativeTools) {
+    return streamOpenAI({ ...o, messages: withTextTools(o.messages, o.tools) });
+  }
   try {
     return await streamOpenAI(o);
   } catch (e) {
     if (!(e instanceof ToolsUnsupported) || !o.tools) throw e;
     o.provider.nativeTools = false;
-    const [first, ...rest] = o.messages;
-    const sys = first?.role === "system" ? first.content : "";
-    const messages: LlmMessage[] = [
-      { role: "system", content: `${sys}\n\n${toolProtocolPrompt(o.tools)}` },
-      ...(first?.role === "system" ? rest : o.messages).map((m): LlmMessage =>
-        m.role === "tool"
-          ? { role: "user", content: `<tool_response>\n${m.content}\n</tool_response>` }
-          : m.role === "assistant" && m.tool_calls?.length
-            ? {
-                role: "assistant",
-                content: `${m.content}\n${m.tool_calls.map((t) => `<tool_call>\n{"name": "${t.function.name}", "arguments": ${t.function.arguments || "{}"}}\n</tool_call>`).join("\n")}`,
-              }
-            : m,
-      ),
-    ];
-    return streamOpenAI({ ...o, messages });
+    return streamOpenAI({ ...o, messages: withTextTools(o.messages, o.tools) });
   }
 }
 

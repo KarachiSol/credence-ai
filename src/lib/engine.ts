@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureColibri } from "./colibri";
 import type { InstalledModel } from "./downloads";
 import { listModels, type Provider } from "./llm";
+import { launchPlan, safePlan, type LaunchPlan } from "./launch";
 import { invoke, isTauri } from "./platform";
 import type { Settings } from "./settings";
+import type { HardwareProfile } from "./types";
 
 export type EngineState = "off" | "starting" | "ready" | "error";
 
@@ -27,7 +29,7 @@ const OFF: EngineInfo = { state: "off", provider: null, installedId: null, label
 const START_TIMEOUT_MS = 15 * 60 * 1000;
 
 /** Starts Colibri for an installed model, or connects to a custom OpenAI-compatible server. */
-export function useEngine(settings: Settings) {
+export function useEngine(settings: Settings, hw: HardwareProfile | null) {
   const [info, setInfo] = useState<EngineInfo>(OFF);
   const attempt = useRef(0);
 
@@ -69,31 +71,45 @@ export function useEngine(settings: Settings) {
         });
         return;
       }
-      try {
+      const plan = launchPlan(model.modelId, hw, settings);
+      const run = async (p: LaunchPlan) => {
+        const startArgs = { modelDir: model.path, extraArgs: p.args, env: p.env, note: p.gpuNote };
         const builtIn = async () => {
           // Use (and if needed download) the engine Credence manages itself.
           const colibri = await ensureColibri();
           if (!colibri.python) throw new Error(`The Colibri engine needs Python 3.10 or newer. ${colibri.pythonHint}`);
-          if (attempt.current === my) await invoke("engine_start", { colibriDir: "", modelDir: model.path });
+          if (attempt.current === my) await invoke("engine_start", { colibriDir: "", ...startArgs });
         };
         if (!settings.colibriDir.trim()) {
           await builtIn();
         } else {
           try {
-            await invoke("engine_start", { colibriDir: settings.colibriDir, modelDir: model.path });
+            await invoke("engine_start", { colibriDir: settings.colibriDir, ...startArgs });
           } catch (e) {
             // Their folder has no Colibri in it: fall back to the built-in engine.
             if (!String(e).includes("launcher (coli) not found")) throw e;
             await builtIn();
           }
         }
-        if (attempt.current !== my) return;
-        const ids = await waitUntilReady(settings.colibriUrl, undefined, my, true);
-        if (attempt.current !== my) return;
+        if (attempt.current !== my) return null;
+        return waitUntilReady(settings.colibriUrl, undefined, my, true);
+      };
+      try {
+        let ids: string[] | null;
+        try {
+          ids = await run(plan);
+        } catch (e) {
+          // The memory plan is an extra: if the engine stops with it, start once more without it.
+          const safe = safePlan(plan);
+          const timedOut = String(e).includes("did not become ready");
+          if (attempt.current !== my || timedOut || safe.args.length === plan.args.length) throw e;
+          ids = await run(safe);
+        }
+        if (ids === null || attempt.current !== my) return;
         setInfo((i) => ({
           ...i,
           state: "ready",
-          provider: { baseUrl: settings.colibriUrl, model: ids[0] ?? model.id, nativeTools: true },
+          provider: { baseUrl: settings.colibriUrl, model: ids[0] ?? model.id, nativeTools: plan.nativeTools },
         }));
       } catch (e) {
         if (attempt.current !== my) return;
@@ -101,7 +117,7 @@ export function useEngine(settings: Settings) {
         setInfo((i) => ({ ...i, state: "error", error: e instanceof Error ? e.message : String(e), logs }));
       }
     },
-    [settings.colibriDir, settings.colibriUrl, waitUntilReady],
+    [settings, hw, waitUntilReady],
   );
 
   const connectCustom = useCallback(async () => {

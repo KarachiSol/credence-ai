@@ -102,6 +102,9 @@ async fn engine_start(
     engine: State<'_, engine::Engine>,
     colibri_dir: String,
     model_dir: String,
+    extra_args: Option<Vec<String>>,
+    env: Option<Vec<(String, String)>>,
+    note: Option<String>,
 ) -> Result<engine::EngineStatus, String> {
     let engine = engine.inner().clone();
     // No folder chosen: use the engine Credence installed itself.
@@ -114,7 +117,13 @@ async fn engine_start(
         engine::expand_home(colibri_dir.trim())
     };
     tauri::async_runtime::spawn_blocking(move || {
-        engine.start(&dir, &PathBuf::from(model_dir), &[])
+        engine.start(
+            &dir,
+            &PathBuf::from(model_dir),
+            &extra_args.unwrap_or_default(),
+            &env.unwrap_or_default(),
+            note.as_deref(),
+        )
     })
     .await
     .map_err(|e| e.to_string())?

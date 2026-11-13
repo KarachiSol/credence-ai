@@ -17,6 +17,8 @@ export interface Settings {
   /** Pages the search tool opens and reads automatically (0–3). */
   searchAutoRead: number;
   temperature: number;
+  /** "auto": use the graphics card (Vulkan) when it helps. "off": CPU only. */
+  gpu: "auto" | "off";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   braveKey: "",
   searchAutoRead: 2,
   temperature: 0.6,
+  gpu: "auto",
 };
 
 const KEY = "credence.settings.v1";

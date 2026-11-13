@@ -124,6 +124,20 @@ export function SettingsScreen({ settings: s, update }: Props) {
         {s.engineMode === "colibri" ? (
           <>
             {!s.colibriDir.trim() && <BuiltInEngine />}
+            <Field
+              label="Graphics card (GPU)"
+              hint="Auto uses your graphics card through Vulkan when it makes the model faster. Pick CPU only if a model crashes or your screen stutters. Applies the next time you start a model."
+            >
+              <Segmented
+                label="Graphics card"
+                value={s.gpu}
+                onChange={(v) => update({ gpu: v })}
+                options={[
+                  { value: "auto", label: "Auto" },
+                  { value: "off", label: "CPU only" },
+                ]}
+              />
+            </Field>
             <details className="group" open={!!s.colibriDir.trim()}>
               <summary className="cursor-pointer text-sm font-medium text-zinc-600 select-none hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">
                 Advanced

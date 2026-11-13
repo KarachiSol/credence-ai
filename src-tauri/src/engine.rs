@@ -225,19 +225,36 @@ impl Engine {
     }
 
     /// Blocking: may run `coli import` first. Call from a blocking thread.
-    pub fn start(&self, colibri_dir: &Path, model_dir: &Path, extra_args: &[String]) -> Result<EngineStatus, String> {
+    pub fn start(
+        &self,
+        colibri_dir: &Path,
+        model_dir: &Path,
+        extra_args: &[String],
+        env: &[(String, String)],
+        note: Option<&str>,
+    ) -> Result<EngineStatus, String> {
         self.stop();
         self.logs.lock().unwrap().clear();
+        if let Some(n) = note {
+            self.log(n.to_string());
+        }
         let launcher = launcher(colibri_dir)?;
         let me = self.clone();
         let model = resolve_model(&launcher, model_dir, &move |l| me.log(l))?;
 
-        self.log(format!("Starting: coli serve --model {}", model.display()));
+        let shown_env: Vec<String> = env.iter().map(|(k, v)| format!("{k}={v} ")).collect();
+        self.log(format!(
+            "Starting: {}coli serve --model {} {}",
+            shown_env.concat(),
+            model.display(),
+            extra_args.join(" ")
+        ));
         let mut child = command(&launcher)
             .arg("serve")
             .arg("--model")
             .arg(&model)
             .args(extra_args)
+            .envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
