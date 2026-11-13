@@ -9,10 +9,44 @@ import type { CatalogModel } from "./types";
  */
 export const CATALOG: CatalogModel[] = [
   {
+    id: "qwen3-0.6b",
+    name: "Qwen3 0.6B",
+    publisher: "Qwen",
+    hfRepo: "unsloth/Qwen3-0.6B-GGUF",
+    description: "The smallest one. Very fast on any PC, good for short questions and quick web searches.",
+    architecture: "qwen3",
+    kind: "dense",
+    totalParamsB: 0.6,
+    activeParamsB: 0.6,
+    qualityRank: 5,
+    tags: ["Chat", "Tiny"],
+    variants: [
+      { quant: "Q4_K_M", bitsPerWeight: 4.8, sizeGB: 0.4, file: "Qwen3-0.6B-Q4_K_M.gguf" },
+      { quant: "Q8_0", bitsPerWeight: 8.5, sizeGB: 0.64, file: "Qwen3-0.6B-Q8_0.gguf" },
+    ],
+  },
+  {
+    id: "qwen3.5-0.8b",
+    name: "Qwen3.5 0.8B",
+    publisher: "Qwen",
+    hfRepo: "unsloth/Qwen3.5-0.8B-GGUF",
+    description: "Newer tiny model. Fast like 0.6B and a bit smarter, uses tools well.",
+    architecture: "qwen35",
+    kind: "dense",
+    totalParamsB: 0.8,
+    activeParamsB: 0.8,
+    qualityRank: 7,
+    tags: ["Chat", "Tiny"],
+    variants: [
+      { quant: "Q4_K_M", bitsPerWeight: 4.8, sizeGB: 0.53, file: "Qwen3.5-0.8B-Q4_K_M.gguf" },
+      { quant: "Q8_0", bitsPerWeight: 8.5, sizeGB: 0.81, file: "Qwen3.5-0.8B-Q8_0.gguf" },
+    ],
+  },
+  {
     id: "qwen3-1.7b",
     name: "Qwen3 1.7B",
     publisher: "Qwen",
-    hfRepo: "Qwen/Qwen3-1.7B-GGUF",
+    hfRepo: "unsloth/Qwen3-1.7B-GGUF",
     description: "Tiny and fast. Good for quick questions on any computer.",
     architecture: "qwen3",
     kind: "dense",
@@ -21,6 +55,7 @@ export const CATALOG: CatalogModel[] = [
     qualityRank: 10,
     tags: ["Chat", "Small"],
     variants: [
+      { quant: "Q4_K_M", bitsPerWeight: 4.8, sizeGB: 1.1, file: "Qwen3-1.7B-Q4_K_M.gguf" },
       { quant: "Q8_0", bitsPerWeight: 8.5, sizeGB: 1.8, file: "Qwen3-1.7B-Q8_0.gguf" },
     ],
   },

@@ -18,7 +18,7 @@ import {
   IconTrash,
   IconWarn,
 } from "../components/icons";
-import { runAgent } from "../lib/agent";
+import { asksForSearch, runAgent } from "../lib/agent";
 import { getStore, type ChatMessage, type Conversation, type Source, type Store } from "../lib/db";
 import type { Downloads } from "../lib/downloads";
 import type { Engine } from "../lib/engine";
@@ -57,6 +57,8 @@ export function ChatScreen({ settings, engine, downloads, onOpenSettings, onBrow
   const [listOpen, setListOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Conversation | null>(null);
   const [memoryNote, setMemoryNote] = useState<string | null>(null);
+  /** "Search the web" switch in the composer: search first, then answer. Stays on until turned off. */
+  const [webOn, setWebOn] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -156,6 +158,7 @@ export function ChatScreen({ settings, engine, downloads, onOpenSettings, onBrow
         history,
         askPermission,
         signal: ctrl.signal,
+        forceSearch: webOn || asksForSearch(text),
         onMessage: (m) => {
           const i = produced.findIndex((x) => x.id === m.id);
           if (i === -1) produced.push(m);
@@ -176,7 +179,7 @@ export function ChatScreen({ settings, engine, downloads, onOpenSettings, onBrow
       setConversations(await store.listConversations());
       void updateMemory(updated, [...history, ...produced.filter((m) => m.content || m.toolCalls)], false);
     }
-  }, [input, store, busy, ready, engine.info, active, messages, settings, askPermission, upsert, updateMemory]);
+  }, [input, store, busy, ready, engine.info, active, messages, settings, askPermission, upsert, updateMemory, webOn]);
 
   const stop = () => {
     abort.current?.abort();
@@ -268,6 +271,8 @@ export function ChatScreen({ settings, engine, downloads, onOpenSettings, onBrow
           busy={busy}
           disabled={!ready}
           note={memoryNote}
+          webOn={webOn}
+          onToggleWeb={() => setWebOn((v) => !v)}
         />
       </section>
 
@@ -702,17 +707,19 @@ function Composer(p: {
   busy: boolean;
   disabled: boolean;
   note: string | null;
+  webOn: boolean;
+  onToggleWeb: () => void;
 }) {
   return (
     <div className="shrink-0 border-t border-zinc-200 bg-white/90 px-3 pt-3 pb-3 backdrop-blur sm:px-4 dark:border-zinc-800 dark:bg-zinc-900/90">
       <form
-        className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/15 dark:border-zinc-700 dark:bg-zinc-900"
+        className="mx-auto flex w-full max-w-3xl flex-col rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/15 dark:border-zinc-700 dark:bg-zinc-900"
         onSubmit={(e) => {
           e.preventDefault();
           p.onSend();
         }}
       >
-        <label className="min-w-0 flex-1">
+        <label className="min-w-0">
           <span className="sr-only">Message</span>
           <textarea
             value={p.value}
@@ -724,29 +731,46 @@ function Composer(p: {
               }
             }}
             rows={1}
-            placeholder={p.disabled ? "Start a model to chat…" : "Message Credence"}
+            placeholder={p.disabled ? "Start a model to chat…" : p.webOn ? "Search the web for…" : "Message Credence"}
             className="field-sizing-content max-h-48 min-h-9 w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-6 placeholder:text-zinc-400 focus:outline-none"
           />
         </label>
-        {p.busy ? (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={p.onStop}
-            aria-label="Stop"
-            className="grid size-9 shrink-0 place-items-center rounded-xl bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+            onClick={p.onToggleWeb}
+            aria-pressed={p.webOn}
+            title={p.webOn ? "Web search is on: every message is searched first" : "Search the web before answering"}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+              p.webOn
+                ? "border-brand-500/40 bg-brand-50 text-brand-700 dark:border-brand-400/40 dark:bg-brand-500/15 dark:text-brand-300"
+                : "border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            }`}
           >
-            <IconStop width={16} height={16} />
+            <IconGlobe width={14} height={14} />
+            Web search
           </button>
-        ) : (
-          <button
-            type="submit"
-            aria-label="Send"
-            disabled={p.disabled || !p.value.trim()}
-            className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40"
-          >
-            <IconSend width={18} height={18} />
-          </button>
-        )}
+          <span className="flex-1" />
+          {p.busy ? (
+            <button
+              type="button"
+              onClick={p.onStop}
+              aria-label="Stop"
+              className="grid size-9 shrink-0 place-items-center rounded-xl bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+            >
+              <IconStop width={16} height={16} />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              aria-label="Send"
+              disabled={p.disabled || !p.value.trim()}
+              className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40"
+            >
+              <IconSend width={18} height={18} />
+            </button>
+          )}
+        </div>
       </form>
       <p className="mx-auto mt-1.5 max-w-3xl text-center text-[11px] text-zinc-400 dark:text-zinc-500">
         {p.note ?? "Runs on your computer. Answers can be wrong, check important facts."}

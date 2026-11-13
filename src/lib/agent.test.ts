@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { toLlmMessages } from "./agent";
+import { asksForSearch, searchQueryFrom, toLlmMessages } from "./agent";
 import type { ChatMessage, Memory } from "./db";
-import { parseInlineToolCalls, splitThinking } from "./llm";
+import { hideToolCallText, parseInlineToolCalls, splitThinking, withTextTools } from "./llm";
 import { pickMemories } from "./memory";
 import { relevantExcerpt } from "./web";
 
@@ -98,5 +98,55 @@ describe("relevantExcerpt", () => {
     const out = relevantExcerpt(text, "how does colibri use the ssd", 400);
     expect(out).toContain("Colibri streams experts");
     expect(out.length).toBeLessThanOrEqual(420);
+  });
+});
+
+describe("text tool calls from small models", () => {
+  it("reads the XML form of Qwen3.5 / 3.6", () => {
+    const r = parseInlineToolCalls("<tool_call>\n<function=web_search>\n<parameter=query>\nlahore weather\n</parameter>\n</function>\n</tool_call>");
+    expect(r.toolCalls).toHaveLength(1);
+    expect(JSON.parse(r.toolCalls[0].arguments)).toEqual({ query: "lahore weather" });
+    expect(r.content).toBe("");
+  });
+  it("reads a call whose closing tag never came", () => {
+    const r = parseInlineToolCalls('Sure.\n<tool_call>\n{"name": "web_search", "arguments": {"query": "gold price"}}');
+    expect(r.toolCalls.map((c) => c.name)).toEqual(["web_search"]);
+    expect(r.content).toBe("Sure.");
+  });
+  it("hides a call while it streams", () => {
+    expect(hideToolCallText('Checking.\n<tool_call>\n{"name": "web_')).toBe("Checking.");
+  });
+  it("writes tools, calls and results in Qwen3's own format", () => {
+    const tools = [{ type: "function" as const, function: { name: "web_search", description: "Search", parameters: {} } }];
+    const out = withTextTools(
+      [
+        { role: "system", content: "You are Credence." },
+        { role: "user", content: "news?" },
+        { role: "assistant", content: "", tool_calls: [{ id: "1", type: "function", function: { name: "web_search", arguments: '{"query":"news"}' } }] },
+        { role: "tool", tool_call_id: "1", content: "r1" },
+        { role: "tool", tool_call_id: "2", content: "r2" },
+      ],
+      tools,
+    );
+    expect(out[0].content).toContain("You are Credence.");
+    expect(out[0].content).toContain("<tools>");
+    expect(out[2].content).toBe('<tool_call>\n{"name": "web_search", "arguments": {"query":"news"}}\n</tool_call>');
+    expect(out).toHaveLength(4);
+    expect(out[3]).toEqual({ role: "user", content: "<tool_response>\nr1\n</tool_response>\n<tool_response>\nr2\n</tool_response>" });
+  });
+});
+
+describe("search requests", () => {
+  it("spots a plain ask for a web search", () => {
+    expect(asksForSearch("web search kro aaj ka gold rate")).toBe(true);
+    expect(asksForSearch("Search the web for Tauri 2 updater docs")).toBe(true);
+    expect(asksForSearch("google kro Karachi weather")).toBe(true);
+    expect(asksForSearch("Write a poem about rain")).toBe(false);
+    expect(asksForSearch("ye code check kro")).toBe(false);
+  });
+  it("turns the message into a short query", () => {
+    expect(searchQueryFrom("web search kro aaj ka gold rate")).toBe("aaj ka gold rate");
+    expect(searchQueryFrom("Lahore ka mausam google kro")).toBe("Lahore ka mausam");
+    expect(searchQueryFrom("Search the web for Tauri 2 updater docs")).toBe("Tauri 2 updater docs");
   });
 });
